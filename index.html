@@ -4,199 +4,138 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>日報集約・個人カルテ作成ツール</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
-        /* A4 印刷用設定 */
+        /* --- 外部依存なしのCSS --- */
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            margin: 0;
+            line-height: 1.5;
+        }
+        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
+        header { text-align: center; margin-bottom: 40px; }
+        h1 { font-size: 2.25rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
+        .subtitle { color: #64748b; }
+        section { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 30px; }
+        .section-title { display: flex; align-items: center; font-size: 1.25rem; font-weight: bold; margin-bottom: 24px; }
+        .step-number { background: #2563eb; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 0.875rem; }
+        .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 40px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s; }
+        .drop-zone:hover { border-color: #3b82f6; background: #eff6ff; }
+        #fileInput { display: none; }
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #f1f5f9; }
+        .setting-card { padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .source-label { font-size: 0.625rem; font-weight: bold; color: #2563eb; text-transform: uppercase; margin-bottom: 4px; }
+        .source-name { font-size: 0.875rem; font-weight: bold; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.875rem; }
+        .search-box { display: flex; gap: 12px; margin-bottom: 30px; }
+        input[type="text"] { flex-grow: 1; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 1rem; outline: none; }
+        .btn { padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-primary { background: #1e293b; color: white; }
+        .btn-success { background: #2563eb; color: white; font-size: 1.125rem; padding: 16px 40px; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+        #nameList { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; padding: 10px; }
+        .name-item { display: flex; align-items: center; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; }
+        .a4-page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto 10mm auto; background: white; box-sizing: border-box; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.2); }
+        .carte-header { border-bottom: 2px solid #1a365d; margin-bottom: 20px; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .carte-title { font-size: 24px; font-weight: 900; margin: 0; color: #1a365d; }
+        .patient-info { border: 2px solid #1e293b; padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; align-items: baseline; }
+        .label-badge { font-size: 12px; background: #1e293b; color: white; padding: 4px 8px; margin-right: 16px; font-weight: bold; }
+        .patient-name { font-size: 32px; font-weight: bold; }
+        .record-card { border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 24px; overflow: hidden; break-inside: avoid; }
+        .record-source { background: #f1f5f9; padding: 8px 16px; font-size: 11px; font-weight: bold; color: #475569; border-bottom: 1px solid #cbd5e1; }
+        .item-row { display: flex; border-bottom: 1px solid #f1f5f9; }
+        .item-label { width: 140px; background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: #64748b; border-right: 1px solid #f1f5f9; flex-shrink: 0; }
+        .item-value { padding: 10px 15px; font-size: 14px; flex-grow: 1; white-space: pre-wrap; }
+        #previewControls { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 100; }
+        .hidden { display: none !important; }
         @media print {
-            body * { visibility: hidden; }
-            #printArea, #printArea * { visibility: visible; }
-            #printArea {
-                position: absolute;
-                left: 0;
-                top: 0;
-                width: 100%;
-                background: white;
-            }
-            .no-print { display: none; }
+            body { background: white; }
+            .no-print { display: none !important; }
+            #printArea { background: white; padding: 0; }
+            .a4-page { margin: 0; box-shadow: none; width: 100%; }
             .page-break { page-break-after: always; }
-            @page {
-                size: A4 portrait;
-                margin: 0;
-            }
-        }
-
-        .a4-page {
-            width: 210mm;
-            min-height: 297mm;
-            padding: 15mm;
-            margin: 10mm auto;
-            background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            box-sizing: border-box;
-            position: relative;
-        }
-
-        .carte-header {
-            border-bottom: 2px solid #1a365d;
-            margin-bottom: 1.5rem;
-            padding-bottom: 0.5rem;
-            color: #1a365d;
-        }
-
-        .item-row {
-            display: flex;
-            border-bottom: 1px solid #e2e8f0;
-            break-inside: avoid;
-        }
-
-        .item-label {
-            width: 150px;
-            background-color: #f8fafc;
-            padding: 8px 12px;
-            font-weight: bold;
-            font-size: 0.85rem;
-            color: #475569;
-            border-right: 1px solid #e2e8f0;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-        }
-
-        .item-value {
-            padding: 8px 12px;
-            font-size: 0.9rem;
-            flex-grow: 1;
-            white-space: pre-wrap;
-            word-break: break-all;
-        }
-
-        /* 検索結果リストのスクロール */
-        #nameList {
-            max-height: 300px;
-            overflow-y: auto;
+            @page { size: A4 portrait; margin: 0; }
         }
     </style>
 </head>
-<body class="bg-slate-100 min-h-screen font-sans text-slate-900">
+<body>
 
-<div class="container mx-auto p-6 max-w-5xl no-print">
-    <header class="mb-10 text-center">
-        <h1 class="text-4xl font-extrabold text-slate-800 mb-2">日報集約・個人カルテ作成ツール</h1>
-        <p class="text-slate-500">複数のExcelファイルを統合し、特定の対象者の情報をA4カルテ形式で出力します</p>
+<div class="container no-print">
+    <header>
+        <h1>日報集約・個人カルテ作成ツール</h1>
+        <p class="subtitle">Excelファイルを統合し、特定の対象者の情報をカルテ形式で出力します</p>
     </header>
 
-    <div class="grid grid-cols-1 gap-8">
-        <!-- Step 1: ファイル読み込み -->
-        <section class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
-            <div class="flex items-center mb-6">
-                <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 font-bold">1</span>
-                <h2 class="text-xl font-bold">Excelデータの読み込み</h2>
-            </div>
-            
-            <div class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:border-blue-400 transition-colors bg-slate-50 group">
-                <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv" class="hidden">
-                <label for="fileInput" class="cursor-pointer block">
-                    <svg class="w-12 h-12 mx-auto text-slate-400 group-hover:text-blue-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                    </svg>
-                    <p class="text-lg font-medium text-slate-700">ファイルを選択、またはここにドラッグ＆ドロップ</p>
-                    <p class="text-sm text-slate-400 mt-1">複数ファイルの一括読み込みに対応しています</p>
-                </label>
-            </div>
-            
-            <div id="columnSettings" class="mt-8 pt-8 border-t border-slate-100 hidden">
-                <h3 class="font-bold text-slate-700 mb-4 flex items-center">
-                    <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
-                    「名前」が入力されているカラムを選択してください
-                </h3>
-                <div id="settingsList" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <!-- JavaScriptで動的に生成 -->
-                </div>
-            </div>
-        </section>
+    <section>
+        <div class="section-title"><span class="step-number">1</span><h2>Excelデータの読み込み</h2></div>
+        <div class="drop-zone" id="dropZone">
+            <p style="font-size: 40px; margin: 0;">📁</p>
+            <p><strong>ファイルを選択、またはここにドラッグ＆ドロップ</strong></p>
+            <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv">
+        </div>
+        <div id="columnSettings" class="hidden"><div class="settings-grid" id="settingsList"></div></div>
+    </section>
 
-        <!-- Step 2: 検索と言語化 -->
-        <section id="searchSection" class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hidden">
-            <div class="flex items-center mb-6">
-                <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 font-bold">2</span>
-                <h2 class="text-xl font-bold">氏名の検索と選択</h2>
-            </div>
-            
-            <div class="flex flex-col sm:flex-row gap-3 mb-8">
-                <div class="relative flex-grow">
-                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
-                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
-                    </span>
-                    <input type="text" id="searchInput" placeholder="検索したい氏名を入力..." 
-                        class="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition sm:text-sm">
-                </div>
-                <button id="searchBtn" class="bg-slate-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-900 transition flex items-center justify-center">
-                    検索実行
-                </button>
-            </div>
-
-            <div id="resultsArea" class="hidden">
-                <div class="flex justify-between items-center mb-4 px-2">
-                    <p class="text-sm font-bold text-slate-500">ヒットした氏名一覧</p>
-                    <button id="selectAllBtn" class="text-xs text-blue-600 hover:underline">すべて選択</button>
-                </div>
-                <div id="nameList" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2">
-                    <!-- 検索結果がここに並ぶ -->
-                </div>
-                
-                <div class="mt-10 text-center">
-                    <button id="generateBtn" class="bg-blue-600 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 transition shadow-xl shadow-blue-200 flex items-center mx-auto">
-                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
-                        カルテプレビューを生成
-                    </button>
-                </div>
-            </div>
-        </section>
-    </div>
+    <section id="searchSection" class="hidden">
+        <div class="section-title"><span class="step-number">2</span><h2>氏名の検索と選択</h2></div>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="検索したい氏名を入力...">
+            <button id="searchBtn" class="btn btn-primary">検索実行</button>
+        </div>
+        <div id="resultsArea" class="hidden">
+            <div id="nameList"></div>
+            <div style="margin-top: 40px; text-align: center;"><button id="generateBtn" class="btn btn-success">カルテプレビューを生成</button></div>
+        </div>
+    </section>
 </div>
 
-<!-- 印刷プレビューエリア -->
 <div id="printArea" class="hidden"></div>
-
-<!-- プレビュー時のみ表示されるフローティング操作パネル -->
-<div id="previewControls" class="fixed bottom-8 left-1/2 -translate-x-1/2 flex gap-4 no-print hidden z-50">
-    <button id="closePreviewBtn" class="bg-slate-800 text-white px-8 py-4 rounded-full shadow-2xl hover:bg-slate-900 font-bold transition">
-        戻る
-    </button>
-    <button id="printBtn" class="bg-blue-600 text-white px-12 py-4 rounded-full shadow-2xl hover:bg-blue-700 font-bold transition flex items-center">
-        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
-        PDFとして出力
-    </button>
+<div id="previewControls" class="no-print hidden">
+    <button id="closePreviewBtn" class="btn btn-primary" style="background: #334155; padding: 15px 40px;">戻る</button>
+    <button id="printBtn" class="btn btn-success" style="background: #ef4444; padding: 15px 60px;">PDFとして出力</button>
 </div>
 
 <script>
-    // --- 状態管理 ---
-    let dataSources = []; // { name: ファイル名, data: 配列, headers: ヘッダー配列, nameCol: 選択された名前列 }
+    /* --- ユーザー提供のPolyfillコード --- */
+    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.prototype.map)Array.prototype.map=function(t){var e=this.length>>>0,r=arguments[1]||void 0,i=new Array(e);for(var n=0;n<e;++n)if(n in this)i[n]=r?t.call(r,this[n],n,this):t(this[n],n,this);return i};if(!Array.prototype.indexOf)Array.prototype.indexOf=function(t){var e=this.length>>>0,r=arguments[1]|0||0;for(r<0&&(r+=e)<0&&(r=0);r<e;++r)if(this[r]===t)return r;return-1};if(!Array.prototype.lastIndexOf)Array.prototype.lastIndexOf=function(t){var e=this.length>>>0,r=e-1;for(;r>=0;--r)if(this[r]===t)return r;return-1};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};if(!Date.prototype.toISOString)Date.prototype.toISOString=function(){function t(t,e){return("0000000"+t).slice(-(e||2))}return function e(){var e=this.getUTCFullYear(),r="";if(e>9999)r="+"+t(e,6);else if(e<0)r="-"+t(-e,6);else r=t(e,4);return[r,t(this.getUTCMonth()+1),t(this.getUTCDate())].join("-")+"T"+[t(this.getUTCHours()),t(this.getUTCMinutes()),t(this.getUTCSeconds())].join(":")+"."+t(this.getUTCMilliseconds(),3)+"Z"}}();if(typeof ArrayBuffer!=="undefined"&&!ArrayBuffer.prototype.slice)ArrayBuffer.prototype.slice=function(t,e){if(t==null)t=0;if(t<0){t+=this.byteLength;if(t<0)t=0}if(t>=this.byteLength)return new Uint8Array(0);if(e==null)e=this.byteLength;if(e<0){e+=this.byteLength;if(e<0)e=0}if(e>this.byteLength)e=this.byteLength;if(t>e)return new Uint8Array(0);var r=new ArrayBuffer(e-t);var i=new Uint8Array(r);var n=new Uint8Array(this,t,e-t);if(i.set)i.set(n);else while(t<=--e)i[e-t]=n[e];return r};if(typeof Uint8Array!=="undefined"&&!Uint8Array.prototype.slice)Uint8Array.prototype.slice=function(t,e){if(t==null)t=0;if(t<0){t+=this.length;if(t<0)t=0}if(t>=this.length)return new Uint8Array(0);if(e==null)e=this.length;if(e<0){e+=this.length;if(e<0)e=0}if(e>this.length)e=this.length;if(t>e)return new Uint8Array(0);var r=new Uint8Array(e-t);while(t<=--e)r[e-t]=this[e];return r};if(typeof window!=="undefined"&&typeof window.getComputedStyle!=="function"){window.getComputedStyle=function(t,e){return this.el=t,this.getPropertyValue=function(e){var r=/(\-([a-z]){1})/g;return e=="float"&&(e="styleFloat"),r.test(e)&&(e=e.replace(r,function(){return arguments[2].toUpperCase()})),t.currentStyle[e]?t.currentStyle[e]:null},this}};
 
-    // --- DOM要素 ---
-    const fileInput = document.getElementById('fileInput');
-    const columnSettings = document.getElementById('columnSettings');
-    const settingsList = document.getElementById('settingsList');
-    const searchSection = document.getElementById('searchSection');
-    const searchInput = document.getElementById('searchInput');
-    const searchBtn = document.getElementById('searchBtn');
-    const resultsArea = document.getElementById('resultsArea');
-    const nameList = document.getElementById('nameList');
-    const selectAllBtn = document.getElementById('selectAllBtn');
-    const generateBtn = document.getElementById('generateBtn');
-    const printArea = document.getElementById('printArea');
-    const previewControls = document.getElementById('previewControls');
-    const printBtn = document.getElementById('printBtn');
-    const closePreviewBtn = document.getElementById('closePreviewBtn');
+    /* 【ライブラリ本体の貼り付け場所】
+       ここに xlsx.full.min.js の中身をすべて貼り付けてください。
+       貼り付けると、この下に XLSX というオブジェクトが定義されます。
+    */
 
-    // --- ファイル読み込み ---
-    fileInput.addEventListener('change', async (e) => {
+    // --- アプリケーションのメインロジック ---
+    let dataSources = [];
+    const elements = {
+        fileInput: document.getElementById('fileInput'),
+        dropZone: document.getElementById('dropZone'),
+        settingsList: document.getElementById('settingsList'),
+        columnSettings: document.getElementById('columnSettings'),
+        searchSection: document.getElementById('searchSection'),
+        searchInput: document.getElementById('searchInput'),
+        searchBtn: document.getElementById('searchBtn'),
+        resultsArea: document.getElementById('resultsArea'),
+        nameList: document.getElementById('nameList'),
+        generateBtn: document.getElementById('generateBtn'),
+        printArea: document.getElementById('printArea'),
+        previewControls: document.getElementById('previewControls'),
+        printBtn: document.getElementById('printBtn'),
+        closePreviewBtn: document.getElementById('closePreviewBtn')
+    };
+
+    elements.dropZone.onclick = () => elements.fileInput.click();
+    elements.fileInput.onchange = handleFiles;
+    elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.borderColor = "#3b82f6"; };
+    elements.dropZone.ondragleave = () => { elements.dropZone.style.borderColor = "#cbd5e1"; };
+    elements.dropZone.ondrop = (e) => { e.preventDefault(); handleFiles({target: {files: e.dataTransfer.files}}); };
+
+    async function handleFiles(e) {
+        if (typeof XLSX === 'undefined') {
+            alert('ライブラリ(xlsx.full.min.js)の中身が貼り付けられていないため、Excelを読み込めません。');
+            return;
+        }
         const files = Array.from(e.target.files);
-        if (files.length === 0) return;
-
-        dataSources = []; // クリア
-        
+        dataSources = [];
         for (const file of files) {
             try {
                 const rawData = await readExcel(file);
@@ -206,40 +145,17 @@
                         let obj = {};
                         headers.forEach((h, i) => {
                             let val = row[i];
-                            // 日付オブジェクトの場合は文字列に変換
-                            if (val instanceof Date) {
-                                val = formatDate(val);
-                            }
+                            if (val instanceof Date) val = `${val.getFullYear()}/${val.getMonth()+1}/${val.getDate()}`;
                             obj[h] = val;
                         });
                         return obj;
                     });
-                    
-                    // 自動で「氏名」「名前」を含む列を探す
                     let defaultCol = headers.find(h => String(h).includes("氏名") || String(h).includes("名前")) || headers[0];
-
-                    dataSources.push({
-                        name: file.name,
-                        data: rows,
-                        headers: headers,
-                        nameCol: defaultCol
-                    });
+                    dataSources.push({ name: file.name, data: rows, headers: headers, nameCol: defaultCol });
                 }
-            } catch (err) {
-                console.error(`Error reading ${file.name}:`, err);
-            }
+            } catch (err) { console.error(err); }
         }
-        
         renderColumnSettings();
-        searchSection.classList.remove('hidden');
-    });
-
-    // Dateオブジェクトを YYYY/MM/DD 形式に
-    function formatDate(date) {
-        const y = date.getFullYear();
-        const m = String(date.getMonth() + 1).padStart(2, '0');
-        const d = String(date.getDate()).padStart(2, '0');
-        return `${y}/${m}/${d}`;
     }
 
     function readExcel(file) {
@@ -248,245 +164,111 @@
             reader.onload = (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
-                    // cellDates: true を指定してシリアル値を日付オブジェクトとして読み込む
                     const workbook = XLSX.read(data, { type: 'array', cellDates: true });
-                    const firstSheetName = workbook.SheetNames[0];
-                    const worksheet = workbook.Sheets[firstSheetName];
-                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-                    resolve(json);
+                    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                    resolve(XLSX.utils.sheet_to_json(sheet, { header: 1 }));
                 } catch (err) { reject(err); }
             };
-            reader.onerror = reject;
             reader.readAsArrayBuffer(file);
         });
     }
 
     function renderColumnSettings() {
-        settingsList.innerHTML = '';
+        elements.settingsList.innerHTML = '';
         dataSources.forEach((src, idx) => {
             const div = document.createElement('div');
-            div.className = "p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between";
-            div.innerHTML = `
-                <div class="mb-2">
-                    <p class="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">DATA SOURCE</p>
-                    <p class="text-sm font-bold text-slate-800 truncate" title="${src.name}">${src.name}</p>
-                </div>
-                <select onchange="updateNameCol(${idx}, this.value)" class="w-full text-sm border-slate-300 rounded-lg p-2 bg-white focus:ring-blue-500">
+            div.className = 'setting-card';
+            div.innerHTML = `<div class="source-label">FILE SOURCE</div><div class="source-name">${src.name}</div>
+                <select onchange="dataSources[${idx}].nameCol = this.value">
                     ${src.headers.map(h => `<option value="${h}" ${h === src.nameCol ? 'selected' : ''}>${h}</option>`).join('')}
-                </select>
-            `;
-            settingsList.appendChild(div);
+                </select>`;
+            elements.settingsList.appendChild(div);
         });
-        columnSettings.classList.remove('hidden');
+        elements.columnSettings.classList.remove('hidden');
+        elements.searchSection.classList.remove('hidden');
     }
 
-    window.updateNameCol = (idx, val) => {
-        dataSources[idx].nameCol = val;
-    };
-
-    // --- 検索 ---
-    searchBtn.addEventListener('click', () => {
-        const query = searchInput.value.trim();
+    elements.searchBtn.onclick = () => {
+        const query = elements.searchInput.value.trim();
         if (!query) return;
-
-        const foundNames = new Set();
+        const found = new Set();
         dataSources.forEach(src => {
             src.data.forEach(row => {
-                const nameValue = String(row[src.nameCol] || "");
-                if (nameValue.includes(query)) {
-                    foundNames.add(nameValue);
-                }
+                const name = String(row[src.nameCol] || "");
+                if (name.includes(query)) found.add(name);
             });
         });
-
-        renderNameList(Array.from(foundNames).sort());
-    });
+        renderNameList(Array.from(found).sort());
+    };
 
     function renderNameList(names) {
-        nameList.innerHTML = '';
+        elements.nameList.innerHTML = '';
         if (names.length === 0) {
-            nameList.innerHTML = '<p class="col-span-full text-center text-slate-400 py-8">一致する氏名がありません</p>';
+            elements.nameList.innerHTML = '<p style="text-align:center; color:#94a3b8; width:100%;">見つかりませんでした</p>';
         } else {
             names.forEach(name => {
                 const label = document.createElement('label');
-                label.className = "flex items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all group";
-                label.innerHTML = `
-                    <input type="checkbox" name="targetName" value="${name}" class="w-5 h-5 mr-3 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
-                    <span class="text-slate-700 font-medium group-hover:text-blue-700 truncate">${name}</span>
-                `;
-                nameList.appendChild(label);
+                label.className = 'name-item';
+                label.innerHTML = `<input type="checkbox" name="targetName" value="${name}"><span>${name}</span>`;
+                elements.nameList.appendChild(label);
             });
         }
-        resultsArea.classList.remove('hidden');
+        elements.resultsArea.classList.remove('hidden');
     }
 
-    selectAllBtn.addEventListener('click', () => {
-        const checkboxes = document.querySelectorAll('input[name="targetName"]');
-        const allChecked = Array.from(checkboxes).every(c => c.checked);
-        checkboxes.forEach(c => c.checked = !allChecked);
-        selectAllBtn.textContent = !allChecked ? "すべて解除" : "すべて選択";
-    });
-
-    // --- カルテ生成 ---
-    generateBtn.addEventListener('click', () => {
-        const selectedNames = Array.from(document.querySelectorAll('input[name="targetName"]:checked')).map(el => el.value);
-        if (selectedNames.length === 0) {
-            alert("対象者を1名以上選択してください。");
-            return;
-        }
-
-        buildPreview(selectedNames);
-        
-        document.querySelector('.container').classList.add('hidden');
-        printArea.classList.remove('hidden');
-        previewControls.classList.remove('hidden');
-        window.scrollTo(0, 0);
-    });
-
-    function buildPreview(names) {
-        printArea.innerHTML = '';
-        
-        names.forEach(name => {
-            let combinedData = [];
+    elements.generateBtn.onclick = () => {
+        const selected = Array.from(document.querySelectorAll('input[name="targetName"]:checked')).map(el => el.value);
+        if (selected.length === 0) return alert("対象者を選択してください");
+        elements.printArea.innerHTML = '';
+        selected.forEach(name => {
+            let userRecords = [];
             dataSources.forEach(src => {
-                const filtered = src.data.filter(row => String(row[src.nameCol]) === name);
-                filtered.forEach(item => {
-                    combinedData.push({
-                        source: src.name,
-                        content: item,
-                        nameCol: src.nameCol
-                    });
-                });
+                const rows = src.data.filter(r => String(r[src.nameCol]) === name);
+                rows.forEach(r => userRecords.push({ source: src.name, content: r, nameCol: src.nameCol }));
             });
-
-            // 「日付」に近いカラムがあればソート
-            combinedData.sort((a, b) => {
-                const findDate = (obj) => {
-                    const key = Object.keys(obj).find(k => k.includes("日付") || k.includes("月日") || k.includes("Date"));
-                    return obj[key] || "";
+            userRecords.sort((a, b) => {
+                const getDate = (o) => {
+                    const k = Object.keys(o.content).find(key => key.includes("日付") || key.includes("月日"));
+                    return o.content[k] || "";
                 };
-                return findDate(a.content) > findDate(b.content) ? 1 : -1;
+                return getDate(a) > getDate(b) ? 1 : -1;
             });
-
             const page = document.createElement('div');
-            page.className = "a4-page page-break";
-            
-            let html = `
-                <div class="carte-header">
-                    <div class="flex justify-between items-end">
-                        <h1 class="text-2xl font-black tracking-tighter">個人別相談記録カルテ</h1>
-                        <p class="text-xs text-slate-500 font-medium">作成日: ${new Date().toLocaleDateString()}</p>
-                    </div>
-                </div>
-                
-                <div class="mb-8 border-2 border-slate-800 p-5 rounded-lg">
-                    <div class="flex items-baseline">
-                        <span class="text-xs font-bold bg-slate-800 text-white px-2 py-1 mr-4">対象者氏名</span>
-                        <span class="text-3xl font-bold">${name} <small class="text-sm font-normal text-slate-500 ml-1">様</small></span>
-                    </div>
-                </div>
-
-                <div class="space-y-8">
-            `;
-
-            combinedData.forEach(item => {
-                html += `
-                    <div class="border border-slate-300 rounded-md overflow-hidden shadow-sm">
-                        <div class="bg-slate-100 px-4 py-2 text-xs font-bold border-bottom border-slate-300 flex justify-between items-center text-slate-600">
-                            <span class="flex items-center">
-                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"></path></svg>
-                                参照元: ${item.source}
-                            </span>
-                        </div>
-                        <div class="bg-white">
-                `;
-                
-                // 全カラムをループ（空白データは非表示、氏名列はスキップ）
-                Object.keys(item.content).forEach(key => {
-                    // 名前列はヘッダーに出ているのでスキップ
-                    if (key === item.nameCol) return; 
-                    
-                    const value = item.content[key];
-                    
-                    // 値が空（空白、null、undefined）の場合は表示しない
-                    if (value === "" || value === null || value === undefined) return;
-                    
-                    html += `
-                        <div class="item-row">
-                            <div class="item-label">${key}</div>
-                            <div class="item-value">${value}</div>
-                        </div>
-                    `;
+            page.className = 'a4-page page-break';
+            let html = `<div class="carte-header"><h1 class="carte-title">個人別相談記録カルテ</h1><span style="font-size: 10px; color: #64748b;">作成日: ${new Date().toLocaleDateString()}</span></div>
+                <div class="patient-info"><span class="label-badge">対象者氏名</span><span class="patient-name">${name} <small style="font-size:14px; font-weight:normal; color:#64748b;">様</small></span></div><div class="records-container">`;
+            userRecords.forEach(rec => {
+                html += `<div class="record-card"><div class="record-source">📁 参照元: ${rec.source}</div>`;
+                Object.keys(rec.content).forEach(key => {
+                    if (key === rec.nameCol) return;
+                    const val = rec.content[key];
+                    if (val === "" || val === null || val === undefined) return;
+                    html += `<div class="item-row"><div class="item-label">${key}</div><div class="item-value">${val}</div></div>`;
                 });
-
-                html += `
-                        </div>
-                    </div>
-                `;
+                html += `</div>`;
             });
-
-            if (combinedData.length === 0) {
-                html += `<div class="py-20 text-center text-slate-300 italic">該当日報データが見つかりませんでした。</div>`;
-            }
-
-            html += `
-                </div>
-                <div class="absolute bottom-10 right-10 text-[10px] text-slate-300">
-                    System ID: ${crypto.randomUUID().split('-')[0].toUpperCase()}
-                </div>
-            `;
-            
+            html += `</div>`;
             page.innerHTML = html;
-            printArea.appendChild(page);
+            elements.printArea.appendChild(page);
         });
-    }
+        document.querySelector('.container').classList.add('hidden');
+        elements.printArea.classList.remove('hidden');
+        elements.previewControls.classList.remove('hidden');
+    };
 
-    // --- 出力とクローズ ---
-    printBtn.addEventListener('click', () => {
-        const now = new Date();
-        const timestamp = now.getFullYear() + 
-            String(now.getMonth() + 1).padStart(2, '0') + 
-            String(now.getDate()).padStart(2, '0') + "_" +
-            String(now.getHours()).padStart(2, '0') + 
-            String(now.getMinutes()).padStart(2, '0') + 
-            String(now.getSeconds()).padStart(2, '0');
-        
-        const originalTitle = document.title;
-        document.title = `日報集約カルテ_${timestamp}`;
-        
-        window.print();
-        
-        document.title = originalTitle;
-    });
-
-    closePreviewBtn.addEventListener('click', () => {
+    elements.closePreviewBtn.onclick = () => {
         document.querySelector('.container').classList.remove('hidden');
-        printArea.classList.add('hidden');
-        previewControls.classList.add('hidden');
-    });
+        elements.printArea.classList.add('hidden');
+        elements.previewControls.classList.add('hidden');
+    };
 
-    // ドラッグ＆ドロップの視覚効果
-    const dropZone = fileInput.parentElement;
-    ['dragenter', 'dragover'].forEach(eventName => {
-        dropZone.addEventListener(eventName, e => {
-            e.preventDefault();
-            dropZone.classList.add('border-blue-500', 'bg-blue-50');
-        });
-    });
-    ['dragleave', 'drop'].forEach(eventName => {
-        dropZone.addEventListener(eventName, e => {
-            e.preventDefault();
-            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
-        });
-    });
-    dropZone.addEventListener('drop', e => {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-        fileInput.files = files;
-        fileInput.dispatchEvent(new Event('change'));
-    });
-
+    elements.printBtn.onclick = () => {
+        const originalTitle = document.title;
+        const now = new Date();
+        document.title = `カルテ_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+        window.print();
+        document.title = originalTitle;
+    };
 </script>
-
 </body>
 </html>
