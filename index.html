@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>日報集約・個人カルテ作成ツール</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        /* A4 印刷用設定 */
+        @media print {
+            body * { visibility: hidden; }
+            #printArea, #printArea * { visibility: visible; }
+            #printArea {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                background: white;
+            }
+            .no-print { display: none; }
+            .page-break { page-break-after: always; }
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+        }
+
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            padding: 15mm;
+            margin: 10mm auto;
+            background: white;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            box-sizing: border-box;
+            position: relative;
+        }
+
+        .carte-header {
+            border-bottom: 2px solid #1a365d;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.5rem;
+            color: #1a365d;
+        }
+
+        .item-row {
+            display: flex;
+            border-bottom: 1px solid #e2e8f0;
+            break-inside: avoid;
+        }
+
+        .item-label {
+            width: 150px;
+            background-color: #f8fafc;
+            padding: 8px 12px;
+            font-weight: bold;
+            font-size: 0.85rem;
+            color: #475569;
+            border-right: 1px solid #e2e8f0;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+        }
+
+        .item-value {
+            padding: 8px 12px;
+            font-size: 0.9rem;
+            flex-grow: 1;
+            white-space: pre-wrap;
+            word-break: break-all;
+        }
+
+        /* 検索結果リストのスクロール */
+        #nameList {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen font-sans text-slate-900">
+
+<div class="container mx-auto p-6 max-w-5xl no-print">
+    <header class="mb-10 text-center">
+        <h1 class="text-4xl font-extrabold text-slate-800 mb-2">日報集約・個人カルテ作成ツール</h1>
+        <p class="text-slate-500">複数のExcelファイルを統合し、特定の対象者の情報をA4カルテ形式で出力します</p>
+    </header>
+
+    <div class="grid grid-cols-1 gap-8">
+        <!-- Step 1: ファイル読み込み -->
+        <section class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200">
+            <div class="flex items-center mb-6">
+                <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 font-bold">1</span>
+                <h2 class="text-xl font-bold">Excelデータの読み込み</h2>
+            </div>
+            
+            <div class="border-2 border-dashed border-slate-300 rounded-xl p-10 text-center hover:border-blue-400 transition-colors bg-slate-50 group">
+                <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv" class="hidden">
+                <label for="fileInput" class="cursor-pointer block">
+                    <svg class="w-12 h-12 mx-auto text-slate-400 group-hover:text-blue-500 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                    </svg>
+                    <p class="text-lg font-medium text-slate-700">ファイルを選択、またはここにドラッグ＆ドロップ</p>
+                    <p class="text-sm text-slate-400 mt-1">複数ファイルの一括読み込みに対応しています</p>
+                </label>
+            </div>
+            
+            <div id="columnSettings" class="mt-8 pt-8 border-t border-slate-100 hidden">
+                <h3 class="font-bold text-slate-700 mb-4 flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    「名前」が入力されているカラムを選択してください
+                </h3>
+                <div id="settingsList" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <!-- JavaScriptで動的に生成 -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Step 2: 検索と言語化 -->
+        <section id="searchSection" class="bg-white p-8 rounded-2xl shadow-sm border border-slate-200 hidden">
+            <div class="flex items-center mb-6">
+                <span class="bg-blue-600 text-white w-8 h-8 rounded-full flex items-center justify-center mr-3 font-bold">2</span>
+                <h2 class="text-xl font-bold">氏名の検索と選択</h2>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row gap-3 mb-8">
+                <div class="relative flex-grow">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400">
+                        <svg class="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </span>
+                    <input type="text" id="searchInput" placeholder="検索したい氏名を入力..." 
+                        class="block w-full pl-10 pr-3 py-3 border border-slate-300 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition sm:text-sm">
+                </div>
+                <button id="searchBtn" class="bg-slate-800 text-white px-8 py-3 rounded-xl font-bold hover:bg-slate-900 transition flex items-center justify-center">
+                    検索実行
+                </button>
+            </div>
+
+            <div id="resultsArea" class="hidden">
+                <div class="flex justify-between items-center mb-4 px-2">
+                    <p class="text-sm font-bold text-slate-500">ヒットした氏名一覧</p>
+                    <button id="selectAllBtn" class="text-xs text-blue-600 hover:underline">すべて選択</button>
+                </div>
+                <div id="nameList" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 p-2">
+                    <!-- 検索結果がここに並ぶ -->
+                </div>
+                
+                <div class="mt-10 text-center">
+                    <button id="generateBtn" class="bg-blue-600 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:bg-blue-700 transition shadow-xl shadow-blue-200 flex items-center mx-auto">
+                        <svg class="w-6 h-6 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        カルテプレビューを生成
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- 印刷プレビューエリア -->
+<div id="printArea" class="hidden"></div>
+
+<!-- プレビュー時のみ表示されるフローティング操作パネル -->
+<div id="previewControls" class="fixed bottom-8 left-1/2 -translate-x-1/2 flex gap-4 no-print hidden z-50">
+    <button id="closePreviewBtn" class="bg-slate-800 text-white px-8 py-4 rounded-full shadow-2xl hover:bg-slate-900 font-bold transition">
+        戻る
+    </button>
+    <button id="printBtn" class="bg-blue-600 text-white px-12 py-4 rounded-full shadow-2xl hover:bg-blue-700 font-bold transition flex items-center">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path></svg>
+        PDFとして出力
+    </button>
+</div>
+
+<script>
+    // --- 状態管理 ---
+    let dataSources = []; // { name: ファイル名, data: 配列, headers: ヘッダー配列, nameCol: 選択された名前列 }
+
+    // --- DOM要素 ---
+    const fileInput = document.getElementById('fileInput');
+    const columnSettings = document.getElementById('columnSettings');
+    const settingsList = document.getElementById('settingsList');
+    const searchSection = document.getElementById('searchSection');
+    const searchInput = document.getElementById('searchInput');
+    const searchBtn = document.getElementById('searchBtn');
+    const resultsArea = document.getElementById('resultsArea');
+    const nameList = document.getElementById('nameList');
+    const selectAllBtn = document.getElementById('selectAllBtn');
+    const generateBtn = document.getElementById('generateBtn');
+    const printArea = document.getElementById('printArea');
+    const previewControls = document.getElementById('previewControls');
+    const printBtn = document.getElementById('printBtn');
+    const closePreviewBtn = document.getElementById('closePreviewBtn');
+
+    // --- ファイル読み込み ---
+    fileInput.addEventListener('change', async (e) => {
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        dataSources = []; // クリア
+        
+        for (const file of files) {
+            try {
+                const rawData = await readExcel(file);
+                if (rawData && rawData.length > 0) {
+                    const headers = rawData[0];
+                    const rows = rawData.slice(1).map(row => {
+                        let obj = {};
+                        headers.forEach((h, i) => {
+                            let val = row[i];
+                            // 日付オブジェクトの場合は文字列に変換
+                            if (val instanceof Date) {
+                                val = formatDate(val);
+                            }
+                            obj[h] = val;
+                        });
+                        return obj;
+                    });
+                    
+                    // 自動で「氏名」「名前」を含む列を探す
+                    let defaultCol = headers.find(h => String(h).includes("氏名") || String(h).includes("名前")) || headers[0];
+
+                    dataSources.push({
+                        name: file.name,
+                        data: rows,
+                        headers: headers,
+                        nameCol: defaultCol
+                    });
+                }
+            } catch (err) {
+                console.error(`Error reading ${file.name}:`, err);
+            }
+        }
+        
+        renderColumnSettings();
+        searchSection.classList.remove('hidden');
+    });
+
+    // Dateオブジェクトを YYYY/MM/DD 形式に
+    function formatDate(date) {
+        const y = date.getFullYear();
+        const m = String(date.getMonth() + 1).padStart(2, '0');
+        const d = String(date.getDate()).padStart(2, '0');
+        return `${y}/${m}/${d}`;
+    }
+
+    function readExcel(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    // cellDates: true を指定してシリアル値を日付オブジェクトとして読み込む
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    const firstSheetName = workbook.SheetNames[0];
+                    const worksheet = workbook.Sheets[firstSheetName];
+                    const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    resolve(json);
+                } catch (err) { reject(err); }
+            };
+            reader.onerror = reject;
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    function renderColumnSettings() {
+        settingsList.innerHTML = '';
+        dataSources.forEach((src, idx) => {
+            const div = document.createElement('div');
+            div.className = "p-4 bg-slate-50 rounded-xl border border-slate-200 flex flex-col justify-between";
+            div.innerHTML = `
+                <div class="mb-2">
+                    <p class="text-[10px] font-bold text-blue-600 uppercase tracking-wider mb-1">DATA SOURCE</p>
+                    <p class="text-sm font-bold text-slate-800 truncate" title="${src.name}">${src.name}</p>
+                </div>
+                <select onchange="updateNameCol(${idx}, this.value)" class="w-full text-sm border-slate-300 rounded-lg p-2 bg-white focus:ring-blue-500">
+                    ${src.headers.map(h => `<option value="${h}" ${h === src.nameCol ? 'selected' : ''}>${h}</option>`).join('')}
+                </select>
+            `;
+            settingsList.appendChild(div);
+        });
+        columnSettings.classList.remove('hidden');
+    }
+
+    window.updateNameCol = (idx, val) => {
+        dataSources[idx].nameCol = val;
+    };
+
+    // --- 検索 ---
+    searchBtn.addEventListener('click', () => {
+        const query = searchInput.value.trim();
+        if (!query) return;
+
+        const foundNames = new Set();
+        dataSources.forEach(src => {
+            src.data.forEach(row => {
+                const nameValue = String(row[src.nameCol] || "");
+                if (nameValue.includes(query)) {
+                    foundNames.add(nameValue);
+                }
+            });
+        });
+
+        renderNameList(Array.from(foundNames).sort());
+    });
+
+    function renderNameList(names) {
+        nameList.innerHTML = '';
+        if (names.length === 0) {
+            nameList.innerHTML = '<p class="col-span-full text-center text-slate-400 py-8">一致する氏名がありません</p>';
+        } else {
+            names.forEach(name => {
+                const label = document.createElement('label');
+                label.className = "flex items-center p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-500 hover:bg-blue-50 cursor-pointer transition-all group";
+                label.innerHTML = `
+                    <input type="checkbox" name="targetName" value="${name}" class="w-5 h-5 mr-3 text-blue-600 rounded border-slate-300 focus:ring-blue-500">
+                    <span class="text-slate-700 font-medium group-hover:text-blue-700 truncate">${name}</span>
+                `;
+                nameList.appendChild(label);
+            });
+        }
+        resultsArea.classList.remove('hidden');
+    }
+
+    selectAllBtn.addEventListener('click', () => {
+        const checkboxes = document.querySelectorAll('input[name="targetName"]');
+        const allChecked = Array.from(checkboxes).every(c => c.checked);
+        checkboxes.forEach(c => c.checked = !allChecked);
+        selectAllBtn.textContent = !allChecked ? "すべて解除" : "すべて選択";
+    });
+
+    // --- カルテ生成 ---
+    generateBtn.addEventListener('click', () => {
+        const selectedNames = Array.from(document.querySelectorAll('input[name="targetName"]:checked')).map(el => el.value);
+        if (selectedNames.length === 0) {
+            alert("対象者を1名以上選択してください。");
+            return;
+        }
+
+        buildPreview(selectedNames);
+        
+        document.querySelector('.container').classList.add('hidden');
+        printArea.classList.remove('hidden');
+        previewControls.classList.remove('hidden');
+        window.scrollTo(0, 0);
+    });
+
+    function buildPreview(names) {
+        printArea.innerHTML = '';
+        
+        names.forEach(name => {
+            let combinedData = [];
+            dataSources.forEach(src => {
+                const filtered = src.data.filter(row => String(row[src.nameCol]) === name);
+                filtered.forEach(item => {
+                    combinedData.push({
+                        source: src.name,
+                        content: item,
+                        nameCol: src.nameCol
+                    });
+                });
+            });
+
+            // 「日付」に近いカラムがあればソート
+            combinedData.sort((a, b) => {
+                const findDate = (obj) => {
+                    const key = Object.keys(obj).find(k => k.includes("日付") || k.includes("月日") || k.includes("Date"));
+                    return obj[key] || "";
+                };
+                return findDate(a.content) > findDate(b.content) ? 1 : -1;
+            });
+
+            const page = document.createElement('div');
+            page.className = "a4-page page-break";
+            
+            let html = `
+                <div class="carte-header">
+                    <div class="flex justify-between items-end">
+                        <h1 class="text-2xl font-black tracking-tighter">個人別相談記録カルテ</h1>
+                        <p class="text-xs text-slate-500 font-medium">作成日: ${new Date().toLocaleDateString()}</p>
+                    </div>
+                </div>
+                
+                <div class="mb-8 border-2 border-slate-800 p-5 rounded-lg">
+                    <div class="flex items-baseline">
+                        <span class="text-xs font-bold bg-slate-800 text-white px-2 py-1 mr-4">対象者氏名</span>
+                        <span class="text-3xl font-bold">${name} <small class="text-sm font-normal text-slate-500 ml-1">様</small></span>
+                    </div>
+                </div>
+
+                <div class="space-y-8">
+            `;
+
+            combinedData.forEach(item => {
+                html += `
+                    <div class="border border-slate-300 rounded-md overflow-hidden shadow-sm">
+                        <div class="bg-slate-100 px-4 py-2 text-xs font-bold border-bottom border-slate-300 flex justify-between items-center text-slate-600">
+                            <span class="flex items-center">
+                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z"></path></svg>
+                                参照元: ${item.source}
+                            </span>
+                        </div>
+                        <div class="bg-white">
+                `;
+                
+                // 全カラムをループ（空白データは非表示、氏名列はスキップ）
+                Object.keys(item.content).forEach(key => {
+                    // 名前列はヘッダーに出ているのでスキップ
+                    if (key === item.nameCol) return; 
+                    
+                    const value = item.content[key];
+                    
+                    // 値が空（空白、null、undefined）の場合は表示しない
+                    if (value === "" || value === null || value === undefined) return;
+                    
+                    html += `
+                        <div class="item-row">
+                            <div class="item-label">${key}</div>
+                            <div class="item-value">${value}</div>
+                        </div>
+                    `;
+                });
+
+                html += `
+                        </div>
+                    </div>
+                `;
+            });
+
+            if (combinedData.length === 0) {
+                html += `<div class="py-20 text-center text-slate-300 italic">該当日報データが見つかりませんでした。</div>`;
+            }
+
+            html += `
+                </div>
+                <div class="absolute bottom-10 right-10 text-[10px] text-slate-300">
+                    System ID: ${crypto.randomUUID().split('-')[0].toUpperCase()}
+                </div>
+            `;
+            
+            page.innerHTML = html;
+            printArea.appendChild(page);
+        });
+    }
+
+    // --- 出力とクローズ ---
+    printBtn.addEventListener('click', () => {
+        const now = new Date();
+        const timestamp = now.getFullYear() + 
+            String(now.getMonth() + 1).padStart(2, '0') + 
+            String(now.getDate()).padStart(2, '0') + "_" +
+            String(now.getHours()).padStart(2, '0') + 
+            String(now.getMinutes()).padStart(2, '0') + 
+            String(now.getSeconds()).padStart(2, '0');
+        
+        const originalTitle = document.title;
+        document.title = `日報集約カルテ_${timestamp}`;
+        
+        window.print();
+        
+        document.title = originalTitle;
+    });
+
+    closePreviewBtn.addEventListener('click', () => {
+        document.querySelector('.container').classList.remove('hidden');
+        printArea.classList.add('hidden');
+        previewControls.classList.add('hidden');
+    });
+
+    // ドラッグ＆ドロップの視覚効果
+    const dropZone = fileInput.parentElement;
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+    });
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, e => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+    });
+    dropZone.addEventListener('drop', e => {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        fileInput.files = files;
+        fileInput.dispatchEvent(new Event('change'));
+    });
+
+</script>
+
+</body>
+</html>
