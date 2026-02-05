@@ -161,7 +161,12 @@
             reader.onload = (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    // codepage: 932 を追加して 日本語環境のCSV (Shift-JIS) に対応
+                    const workbook = XLSX.read(data, { 
+                        type: 'array', 
+                        cellDates: true,
+                        codepage: 932
+                    });
                     const sheet = workbook.Sheets[workbook.SheetNames[0]];
                     resolve(XLSX.utils.sheet_to_json(sheet, { header: 1 }));
                 } catch (err) { reject(err); }
