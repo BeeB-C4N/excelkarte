@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>日報集約・個人カルテ作成ツール</title>
+    <!-- オフライン対応：同じディレクトリにあるJSファイルを読み込む -->
+    <script src="xlsx.full.min.js"></script>
     <style>
         /* --- 外部依存なしのCSS --- */
         body {
@@ -126,7 +128,7 @@
 
     async function handleFiles(e) {
         if (typeof XLSX === 'undefined') {
-            alert('ライブラリ(xlsx.full.min.js)の中身が貼り付けられていないため、Excelを読み込めません。');
+            alert('ライブラリ(xlsx.full.min.js)が読み込まれていないか、同じフォルダに見つからないため、Excelを読み込めません。');
             return;
         }
         const files = Array.from(e.target.files);
@@ -267,5 +269,3 @@
 </script>
 </body>
 </html>
-
-
