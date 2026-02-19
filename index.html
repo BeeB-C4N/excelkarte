@@ -7,7 +7,7 @@
     <!-- オフライン対応：同じディレクトリにあるJSファイルを読み込む -->
     <script src="xlsx.full.min.js"></script>
     <style>
-        /* --- 外部依存なしのCSS --- */
+        /* --- CSS定義 (外部依存なし) --- */
         body {
             font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
             background-color: #f1f5f9;
@@ -18,7 +18,7 @@
         .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
         header { text-align: center; margin-bottom: 40px; }
         h1 { font-size: 2.25rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
-        .subtitle { color: #64748b; }
+        .subtitle { color: #64748b; font-size: 0.9rem; }
         section { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 30px; }
         .section-title { display: flex; align-items: center; font-size: 1.25rem; font-weight: bold; margin-bottom: 24px; }
         .step-number { background: #2563eb; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 0.875rem; }
@@ -29,14 +29,16 @@
         .setting-card { padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
         .source-label { font-size: 0.625rem; font-weight: bold; color: #2563eb; text-transform: uppercase; margin-bottom: 4px; }
         .source-name { font-size: 0.875rem; font-weight: bold; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.875rem; }
+        select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.875rem; outline: none; }
         .search-box { display: flex; gap: 12px; margin-bottom: 30px; }
         input[type="text"] { flex-grow: 1; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 1rem; outline: none; }
         .btn { padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
         .btn-primary { background: #1e293b; color: white; }
         .btn-success { background: #2563eb; color: white; font-size: 1.125rem; padding: 16px 40px; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
-        #nameList { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; padding: 10px; }
+        #nameList { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; padding: 10px; border: 1px solid #f1f5f9; border-radius: 8px; }
         .name-item { display: flex; align-items: center; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; }
+        .name-item:hover { border-color: #3b82f6; background: #f0f7ff; }
+        .name-item input { margin-right: 12px; width: 18px; height: 18px; }
         .a4-page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto 10mm auto; background: white; box-sizing: border-box; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.2); }
         .carte-header { border-bottom: 2px solid #1a365d; margin-bottom: 20px; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end; }
         .carte-title { font-size: 24px; font-weight: 900; margin: 0; color: #1a365d; }
@@ -47,14 +49,14 @@
         .record-source { background: #f1f5f9; padding: 8px 16px; font-size: 11px; font-weight: bold; color: #475569; border-bottom: 1px solid #cbd5e1; }
         .item-row { display: flex; border-bottom: 1px solid #f1f5f9; }
         .item-label { width: 140px; background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: #64748b; border-right: 1px solid #f1f5f9; flex-shrink: 0; }
-        .item-value { padding: 10px 15px; font-size: 14px; flex-grow: 1; white-space: pre-wrap; }
+        .item-value { padding: 10px 15px; font-size: 14px; flex-grow: 1; white-space: pre-wrap; word-break: break-all; }
         #previewControls { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 100; }
         .hidden { display: none !important; }
         @media print {
             body { background: white; }
             .no-print { display: none !important; }
             #printArea { background: white; padding: 0; }
-            .a4-page { margin: 0; box-shadow: none; width: 100%; }
+            .a4-page { margin: 0; box-shadow: none; width: 100%; border: none; }
             .page-break { page-break-after: always; }
             @page { size: A4 portrait; margin: 0; }
         }
@@ -65,14 +67,17 @@
 <div class="container no-print">
     <header>
         <h1>日報集約・個人カルテ作成ツール</h1>
-        <p class="subtitle">Excelファイルを統合し、特定の対象者の情報をカルテ形式で出力します</p>
+        <p class="subtitle">複数ファイルを統合し、特定の対象者の情報をカルテ形式で出力します</p>
     </header>
 
     <section>
-        <div class="section-title"><span class="step-number">1</span><h2>Excelデータの読み込み</h2></div>
+        <div class="section-title"><span class="step-number">1</span><h2>データの読み込み</h2></div>
         <div class="drop-zone" id="dropZone">
-            <p style="font-size: 40px; margin: 0;">📁</p>
+            <svg style="width: 48px; height: 48px; margin: 0 auto 16px auto; color: #94a3b8;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+            </svg>
             <p><strong>ファイルを選択、またはここにドラッグ＆ドロップ</strong></p>
+            <p style="font-size: 0.75rem; color: #94a3b8; margin-top: 8px;">Excel(.xlsx, .xls) または CSV(.csv) に対応</p>
             <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv">
         </div>
         <div id="columnSettings" class="hidden"><div class="settings-grid" id="settingsList"></div></div>
@@ -98,10 +103,10 @@
 </div>
 
 <script>
-    /* --- ユーザー提供のPolyfillコード --- */
-    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.prototype.map)Array.prototype.map=function(t){var e=this.length>>>0,r=arguments[1]||void 0,i=new Array(e);for(var n=0;n<e;++n)if(n in this)i[n]=r?t.call(r,this[n],n,this):t(this[n],n,this);return i};if(!Array.prototype.indexOf)Array.prototype.indexOf=function(t){var e=this.length>>>0,r=arguments[1]|0||0;for(r<0&&(r+=e)<0&&(r=0);r<e;++r)if(this[r]===t)return r;return-1};if(!Array.prototype.lastIndexOf)Array.prototype.lastIndexOf=function(t){var e=this.length>>>0,r=e-1;for(;r>=0;--r)if(this[r]===t)return r;return-1};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};if(!Date.prototype.toISOString)Date.prototype.toISOString=function(){function t(t,e){return("0000000"+t).slice(-(e||2))}return function e(){var e=this.getUTCFullYear(),r="";if(e>9999)r="+"+t(e,6);else if(e<0)r="-"+t(-e,6);else r=t(e,4);return[r,t(this.getUTCMonth()+1),t(this.getUTCDate())].join("-")+"T"+[t(this.getUTCHours()),t(this.getUTCMinutes()),t(this.getUTCSeconds())].join(":")+"."+t(this.getUTCMilliseconds(),3)+"Z"}}();if(typeof ArrayBuffer!=="undefined"&&!ArrayBuffer.prototype.slice)ArrayBuffer.prototype.slice=function(t,e){if(t==null)t=0;if(t<0){t+=this.byteLength;if(t<0)t=0}if(t>=this.byteLength)return new Uint8Array(0);if(e==null)e=this.byteLength;if(e<0){e+=this.byteLength;if(e<0)e=0}if(e>this.byteLength)e=this.byteLength;if(t>e)return new Uint8Array(0);var r=new ArrayBuffer(e-t);var i=new Uint8Array(r);var n=new Uint8Array(this,t,e-t);if(i.set)i.set(n);else while(t<=--e)i[e-t]=n[e];return r};if(typeof Uint8Array!=="undefined"&&!Uint8Array.prototype.slice)Uint8Array.prototype.slice=function(t,e){if(t==null)t=0;if(t<0){t+=this.length;if(t<0)t=0}if(t>=this.length)return new Uint8Array(0);if(e==null)e=this.length;if(e<0){e+=this.length;if(e<0)e=0}if(e>this.length)e=this.length;if(t>e)return new Uint8Array(0);var r=new Uint8Array(e-t);while(t<=--e)r[e-t]=this[e];return r};if(typeof window!=="undefined"&&typeof window.getComputedStyle!=="function"){window.getComputedStyle=function(t,e){return this.el=t,this.getPropertyValue=function(e){var r=/(\-([a-z]){1})/g;return e=="float"&&(e="styleFloat"),r.test(e)&&(e=e.replace(r,function(){return arguments[2].toUpperCase()})),t.currentStyle[e]?t.currentStyle[e]:null},this}};
+    /* --- 互換性維持のためのPolyfill (ユーザー提供分) --- */
+    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
 
-    // --- アプリケーションのメインロジック ---
+    // --- メインロジック ---
     let dataSources = [];
     const elements = {
         fileInput: document.getElementById('fileInput'),
@@ -128,14 +133,14 @@
 
     async function handleFiles(e) {
         if (typeof XLSX === 'undefined') {
-            alert('ライブラリ(xlsx.full.min.js)が読み込まれていないか、同じフォルダに見つからないため、Excelを読み込めません。');
+            alert('ライブラリ(xlsx.full.min.js)が見つかりません。HTMLと同じフォルダに配置してください。');
             return;
         }
         const files = Array.from(e.target.files);
         dataSources = [];
         for (const file of files) {
             try {
-                const rawData = await readExcel(file);
+                const rawData = await readData(file);
                 if (rawData && rawData.length > 0) {
                     const headers = rawData[0];
                     const rows = rawData.slice(1).map(row => {
@@ -150,23 +155,33 @@
                     let defaultCol = headers.find(h => String(h).includes("氏名") || String(h).includes("名前")) || headers[0];
                     dataSources.push({ name: file.name, data: rows, headers: headers, nameCol: defaultCol });
                 }
-            } catch (err) { console.error(err); }
+            } catch (err) { console.error(err); alert(file.name + " の読み込み中にエラーが発生しました。"); }
         }
         renderColumnSettings();
     }
 
-    function readExcel(file) {
+    // Excel または CSV を読み込む (Shift-JIS 文字化け対策)
+    function readData(file) {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
+            const fileName = file.name.toLowerCase();
+            
             reader.onload = (e) => {
                 try {
                     const data = new Uint8Array(e.target.result);
-                    // codepage: 932 を追加して 日本語環境のCSV (Shift-JIS) に対応
-                    const workbook = XLSX.read(data, { 
-                        type: 'array', 
-                        cellDates: true,
-                        codepage: 932
-                    });
+                    let workbook;
+                    
+                    if (fileName.endsWith('.csv')) {
+                        // CSVの場合は Shift-JIS (CP932) でデコードを試みる
+                        const decoder = new TextDecoder('shift-jis');
+                        const decodedString = decoder.decode(data);
+                        // デコードした文字列を SheetJS に渡す
+                        workbook = XLSX.read(decodedString, { type: 'string' });
+                    } else {
+                        // Excelファイルの場合はバイナリとして読み込む (XMLベースなのでUTF-8で処理される)
+                        workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    }
+                    
                     const sheet = workbook.Sheets[workbook.SheetNames[0]];
                     resolve(XLSX.utils.sheet_to_json(sheet, { header: 1 }));
                 } catch (err) { reject(err); }
@@ -206,7 +221,7 @@
     function renderNameList(names) {
         elements.nameList.innerHTML = '';
         if (names.length === 0) {
-            elements.nameList.innerHTML = '<p style="text-align:center; color:#94a3b8; width:100%;">見つかりませんでした</p>';
+            elements.nameList.innerHTML = '<p style="text-align:center; color:#94a3b8; width:100%; padding: 20px;">見つかりませんでした</p>';
         } else {
             names.forEach(name => {
                 const label = document.createElement('label');
@@ -240,7 +255,7 @@
             let html = `<div class="carte-header"><h1 class="carte-title">個人別相談記録カルテ</h1><span style="font-size: 10px; color: #64748b;">作成日: ${new Date().toLocaleDateString()}</span></div>
                 <div class="patient-info"><span class="label-badge">対象者氏名</span><span class="patient-name">${name} <small style="font-size:14px; font-weight:normal; color:#64748b;">様</small></span></div><div class="records-container">`;
             userRecords.forEach(rec => {
-                html += `<div class="record-card"><div class="record-source">📁 参照元: ${rec.source}</div>`;
+                html += `<div class="record-card"><div class="record-source">データ元: ${rec.source}</div>`;
                 Object.keys(rec.content).forEach(key => {
                     if (key === rec.nameCol) return;
                     const val = rec.content[key];
@@ -267,7 +282,9 @@
     elements.printBtn.onclick = () => {
         const originalTitle = document.title;
         const now = new Date();
-        document.title = `カルテ_${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}_${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}`;
+        const dateStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
+        const timeStr = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0');
+        document.title = `相談カルテ_${dateStr}_${timeStr}`;
         window.print();
         document.title = originalTitle;
     };
