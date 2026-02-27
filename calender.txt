@@ -1,0 +1,142 @@
+Option Explicit
+
+Public Sub 雛形から作成してカレンダー入力_志賀富来()
+    Dim wb As Workbook: Set wb = ThisWorkbook
+    
+    ' ▼必要に応じて変更
+    Const CONFIG_SHEET As String = "設定"
+    Const TEMPLATE_SHIKA As String = "志賀雛形"
+    Const TEMPLATE_TOGI As String = "富来雛形"
+    
+    '--- 設定シート取得
+    Dim wsCfg As Worksheet
+    Set wsCfg = wb.Worksheets(CONFIG_SHEET)
+    
+    '--- 西暦取得
+    If Not IsNumeric(wsCfg.Range("B2").Value) Then
+        MsgBox "設定シート(" & CONFIG_SHEET & ")のB2が数値ではありません。B2=" & CStr(wsCfg.Range("B2").Value), vbExclamation
+        Exit Sub
+    End If
+    
+    Dim baseYear As Long
+    baseYear = CLng(wsCfg.Range("B2").Value)
+    
+    Dim nameShika As String, nameTogi As String
+    nameShika = CStr(baseYear) & "志賀"
+    nameTogi = CStr(baseYear) & "富来"
+    
+    '--- すでに存在するかチェック（1つでもあれば終了）
+    Dim existsList As String
+    existsList = ""
+    If WorksheetExists(nameShika) Then existsList = existsList & "・" & nameShika & vbCrLf
+    If WorksheetExists(nameTogi) Then existsList = existsList & "・" & nameTogi & vbCrLf
+    
+    If existsList <> "" Then
+        MsgBox "すでに作成済みのシートがあるため終了します：" & vbCrLf & existsList, vbExclamation
+        Exit Sub
+    End If
+    
+    '--- 雛形シート存在チェック
+    If Not WorksheetExists(TEMPLATE_SHIKA) Then
+        MsgBox "雛形シートが見つかりません：" & TEMPLATE_SHIKA, vbExclamation
+        Exit Sub
+    End If
+    If Not WorksheetExists(TEMPLATE_TOGI) Then
+        MsgBox "雛形シートが見つかりません：" & TEMPLATE_TOGI, vbExclamation
+        Exit Sub
+    End If
+    
+    '--- 雛形からコピーして作成
+    Dim wsShika As Worksheet, wsTogi As Worksheet
+    Set wsShika = CopyTemplateAndRename(wb.Worksheets(TEMPLATE_SHIKA), nameShika)
+    Set wsTogi = CopyTemplateAndRename(wb.Worksheets(TEMPLATE_TOGI), nameTogi)
+    
+    '--- 設定表を参照してカレンダー入力
+    FillCalendarFromConfig wsCfg, wsShika, wsTogi, baseYear
+    
+    MsgBox "カレンダーの入力が完了しました。", vbInformation
+End Sub
+
+'====================================================
+' 設定表（A6以降）の「年/月/開始/終了」を読んで、2シートへ入力
+'====================================================
+Private Sub FillCalendarFromConfig(ByVal wsCfg As Worksheet, ByVal wsShika As Worksheet, ByVal wsTogi As Worksheet, ByVal baseYear As Long)
+    Dim r As Long: r = 6
+    
+    Do While Trim(CStr(wsCfg.Cells(r, 1).Value)) <> ""
+        Dim y As Long, m As Long
+        y = Val(CStr(wsCfg.Cells(r, 1).Value)) ' "2026年" -> 2026
+        m = Val(CStr(wsCfg.Cells(r, 2).Value)) ' "4月"   -> 4
+        
+        ' 対象：baseYearの4?12月、baseYear+1の1?3月
+        If (y = baseYear And m >= 4 And m <= 12) Or (y = baseYear + 1 And m >= 1 And m <= 3) Then
+            Dim startAddr As String, endAddr As String
+            startAddr = Trim(CStr(wsCfg.Cells(r, 3).Value)) ' 例 "A6"
+            endAddr = Trim(CStr(wsCfg.Cells(r, 4).Value))   ' 例 "G11"
+            
+            If startAddr <> "" And endAddr <> "" Then
+                FillOneMonthBlock wsShika, y, m, wsShika.Range(startAddr), wsShika.Range(endAddr)
+                FillOneMonthBlock wsTogi, y, m, wsTogi.Range(startAddr), wsTogi.Range(endAddr)
+            End If
+        End If
+        
+        r = r + 1
+    Loop
+End Sub
+
+'====================================================
+' 1か月分のブロックに日付を入力（日曜始まり）
+'====================================================
+Private Sub FillOneMonthBlock(ByVal ws As Worksheet, ByVal y As Long, ByVal m As Long, ByVal rngStart As Range, ByVal rngEnd As Range)
+    Dim block As Range
+    Set block = ws.Range(rngStart, rngEnd)
+    
+    ' 数字を消してから入力（罫線や色は維持）
+    block.ClearContents
+    
+    Dim firstDate As Date
+    firstDate = DateSerial(y, m, 1)
+    
+    Dim daysInMonth As Long
+    daysInMonth = Day(DateSerial(y, m + 1, 0))
+    
+    ' vbSunday：日=1, 月=2, ... 土=7
+    Dim startW As Long
+    startW = Weekday(firstDate, vbSunday)
+    
+    Dim totalRows As Long, totalCols As Long
+    totalRows = block.Rows.Count
+    totalCols = block.Columns.Count
+    
+    Dim d As Long
+    For d = 1 To daysInMonth
+        Dim offset As Long
+        offset = (startW - 1) + (d - 1) ' 0-based
+        
+        Dim rr As Long, cc As Long
+        rr = offset \ 7
+        cc = offset Mod 7
+        
+        If rr + 1 > totalRows Or cc + 1 > totalCols Then Exit For
+        
+        rngStart.offset(rr, cc).Value = d
+    Next d
+End Sub
+
+'====================================================
+' 雛形をコピーして、コピー先を返す（末尾に作成される）
+'====================================================
+Private Function CopyTemplateAndRename(ByVal wsTemplate As Worksheet, ByVal newName As String) As Worksheet
+    wsTemplate.Copy After:=wsTemplate.Parent.Worksheets(wsTemplate.Parent.Worksheets.Count)
+    Set CopyTemplateAndRename = wsTemplate.Parent.ActiveSheet
+    CopyTemplateAndRename.Name = newName
+End Function
+
+'====================================================
+' シート存在チェック
+'====================================================
+Private Function WorksheetExists(ByVal sheetName As String) As Boolean
+    On Error Resume Next
+    WorksheetExists = Not (ThisWorkbook.Worksheets(sheetName) Is Nothing)
+    On Error GoTo 0
+End Function
