@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>相談カルテ</title>
+    <!-- オフライン対応：同じディレクトリにあるJSファイルを読み込む -->
+    <script src="xlsx.full.min.js"></script>
+    <script src="encoding.min.js"></script>
+    <style>
+        /* --- 外部依存なしのCSS --- */
+        body {
+            font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+            background-color: #f1f5f9;
+            color: #0f172a;
+            margin: 0;
+            line-height: 1.5;
+        }
+        .container { max-width: 1000px; margin: 0 auto; padding: 40px 20px; }
+        header { text-align: center; margin-bottom: 40px; }
+        h1 { font-size: 2.25rem; font-weight: 800; color: #1e293b; margin-bottom: 8px; }
+        .subtitle { color: #64748b; font-size: 0.95rem; }
+        section { background: white; padding: 30px; border-radius: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border: 1px solid #e2e8f0; margin-bottom: 30px; }
+        .section-title { display: flex; align-items: center; font-size: 1.25rem; font-weight: bold; margin-bottom: 24px; }
+        .step-number { background: #2563eb; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 0.875rem; }
+        
+        /* ファイル入力 */
+        .drop-zone { border: 2px dashed #cbd5e1; border-radius: 12px; padding: 40px; text-align: center; background: #f8fafc; cursor: pointer; transition: all 0.2s; }
+        .drop-zone:hover { border-color: #3b82f6; background: #eff6ff; }
+        .drop-zone svg { width: 48px; height: 48px; margin-bottom: 12px; color: #94a3b8; }
+        #fileInput { display: none; }
+
+        /* カラム設定 */
+        .settings-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; margin-top: 20px; padding-top: 20px; border-top: 1px solid #f1f5f9; }
+        .setting-card { padding: 16px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; }
+        .source-label { font-size: 0.625rem; font-weight: bold; color: #2563eb; text-transform: uppercase; margin-bottom: 4px; }
+        .source-name { font-size: 0.875rem; font-weight: bold; margin-bottom: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        select { width: 100%; padding: 8px; border-radius: 8px; border: 1px solid #cbd5e1; font-size: 0.875rem; outline: none; background-color: white; }
+
+        /* 検索 */
+        .search-box { display: flex; gap: 12px; margin-bottom: 30px; }
+        input[type="text"] { flex-grow: 1; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 1rem; outline: none; }
+        input[type="text"]:focus { border-color: #2563eb; box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1); }
+        .btn { padding: 12px 24px; border-radius: 12px; font-weight: bold; cursor: pointer; border: none; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-primary { background: #1e293b; color: white; }
+        .btn-success { background: #2563eb; color: white; font-size: 1.125rem; padding: 16px 40px; box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.3); }
+        .btn-outline { background: white; border: 1px solid #3b82f6; color: #3b82f6; padding: 8px 16px; font-size: 0.9rem; }
+        .btn-outline:hover { background: #eff6ff; }
+        
+        #nameList { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; max-height: 300px; overflow-y: auto; padding: 10px; }
+        .name-item { display: flex; align-items: center; padding: 12px; background: white; border: 1px solid #e2e8f0; border-radius: 12px; cursor: pointer; }
+        .name-item:hover { border-color: #3b82f6; background: #f0f7ff; }
+        .name-item input { margin-right: 12px; width: 18px; height: 18px; cursor: pointer; }
+
+        /* オプションセクション */
+        .genogram-option { margin-top: 40px; text-align: center; border-top: 1px dashed #cbd5e1; padding-top: 30px; }
+
+        /* カルテプレビュー・印刷 */
+        #printArea { background: #94a3b8; padding: 20px 0; }
+        .a4-page { width: 210mm; min-height: 297mm; padding: 15mm; margin: 0 auto 10mm auto; background: white; box-sizing: border-box; position: relative; box-shadow: 0 0 20px rgba(0,0,0,0.2); }
+        .carte-header { border-bottom: 2px solid #1a365d; margin-bottom: 20px; padding-bottom: 10px; display: flex; justify-content: space-between; align-items: flex-end; }
+        .carte-title { font-size: 24px; font-weight: 900; margin: 0; color: #1a365d; }
+        .patient-info { border: 2px solid #1e293b; padding: 20px; border-radius: 8px; margin-bottom: 30px; display: flex; align-items: baseline; }
+        .label-badge { font-size: 12px; background: #1e293b; color: white; padding: 4px 8px; margin-right: 16px; font-weight: bold; }
+        .patient-name { font-size: 32px; font-weight: bold; }
+        
+        .record-card { border: 1px solid #cbd5e1; border-radius: 6px; margin-bottom: 24px; overflow: hidden; break-inside: avoid; }
+        .record-source { background: #f1f5f9; padding: 8px 16px; font-size: 11px; font-weight: bold; color: #475569; border-bottom: 1px solid #cbd5e1; }
+        .item-row { display: flex; border-bottom: 1px solid #f1f5f9; }
+        .item-row:last-child { border-bottom: none; }
+        .item-label { width: 140px; background: #f8fafc; padding: 10px 15px; font-size: 12px; font-weight: bold; color: #64748b; border-right: 1px solid #f1f5f9; flex-shrink: 0; display: flex; align-items: center; }
+        .item-value { padding: 10px 15px; font-size: 14px; flex-grow: 1; white-space: pre-wrap; word-break: break-all; }
+
+        /* ジェノグラムプレビュー用 */
+        .genogram-container { width: 100%; height: 240mm; border: 1px solid #e2e8f0; background: white; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        .genogram-svg { max-width: 100%; max-height: 100%; }
+
+        #previewControls { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; z-index: 100; }
+        .hidden { display: none !important; }
+
+        @media print {
+            body { background: white; }
+            .no-print { display: none !important; }
+            #printArea { background: white; padding: 0; }
+            .a4-page { margin: 0; box-shadow: none; width: 100%; border: none; }
+            .page-break { page-break-after: always; }
+            @page { size: A4 portrait; margin: 0; }
+            .genogram-container { border: none; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container no-print">
+    <header>
+        <h1>相談カルテ</h1>
+        <p class="subtitle">複数の相談ファイルとジェノグラムを統合し、特定の対象者の情報をカルテ形式で出力</p>
+    </header>
+
+    <section>
+        <div class="section-title"><span class="step-number">1</span><h2>データの読み込み</h2></div>
+        <div class="drop-zone" id="dropZone">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m5 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+            <p><strong>ファイルを選択、またはここにドラッグ＆ドロップ</strong></p>
+            <p style="font-size: 0.75rem; color: #94a3b8;">Excelファイル (.xlsx / .xls)</p>
+            <input type="file" id="fileInput" multiple accept=".xlsx, .xls, .csv">
+        </div>
+        <div id="columnSettings" class="hidden"><div class="settings-grid" id="settingsList"></div></div>
+    </section>
+
+    <section id="searchSection" class="hidden">
+        <div class="section-title"><span class="step-number">2</span><h2>氏名の検索と選択</h2></div>
+        <div class="search-box">
+            <input type="text" id="searchInput" placeholder="検索したい氏名を入力...">
+            <button id="searchBtn" class="btn btn-primary">検索実行</button>
+        </div>
+        <div id="resultsArea" class="hidden">
+            <div id="nameList"></div>
+            
+            <!-- ジェノグラム読み込み＆プレビュー生成エリア -->
+            <div class="genogram-option">
+                <div style="margin-bottom: 24px;">
+                    <p style="font-size: 14px; color: #475569; margin-bottom: 12px;">【オプション】カルテの最後にジェノグラムを追加する場合はJSONファイルを読み込んでください</p>
+                    <input type="file" id="genoFileInput" accept=".json" class="hidden">
+                    <button id="btnImportGeno" class="btn btn-outline">
+                        ジェノグラム(.json)を選択
+                    </button>
+                    <span id="genoFileNameDisplay" style="margin-left: 12px; font-size: 14px; color: #64748b;">ファイル未選択</span>
+                </div>
+                <button id="generateBtn" class="btn btn-success">カルテプレビューを生成</button>
+            </div>
+        </div>
+    </section>
+</div>
+
+<!-- プレビューエリア -->
+<div id="printArea" class="hidden"></div>
+
+<!-- プレビュー操作パネル -->
+<div id="previewControls" class="no-print hidden">
+    <button id="closePreviewBtn" class="btn btn-primary" style="background: #334155; padding: 15px 40px;">戻る</button>
+    <button id="printBtn" class="btn btn-success" style="background: #ef4444; padding: 15px 60px;">PDFとして出力</button>
+</div>
+
+<script>
+    /* --- 互換性維持のためのPolyfill --- */
+    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
+
+    // --- 日付フォーマット関数 (年/月/日) ---
+    function formatDateString(date) {
+        if (!date || isNaN(date.getTime())) return "";
+        return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+    }
+
+    // --- メインロジック ---
+    let dataSources = [];
+    let genoElements = []; // ジェノグラムのデータを保持
+
+    const elements = {
+        fileInput: document.getElementById('fileInput'),
+        dropZone: document.getElementById('dropZone'),
+        settingsList: document.getElementById('settingsList'),
+        columnSettings: document.getElementById('columnSettings'),
+        searchSection: document.getElementById('searchSection'),
+        searchInput: document.getElementById('searchInput'),
+        searchBtn: document.getElementById('searchBtn'),
+        resultsArea: document.getElementById('resultsArea'),
+        nameList: document.getElementById('nameList'),
+        genoFileInput: document.getElementById('genoFileInput'),
+        btnImportGeno: document.getElementById('btnImportGeno'),
+        genoFileNameDisplay: document.getElementById('genoFileNameDisplay'),
+        generateBtn: document.getElementById('generateBtn'),
+        printArea: document.getElementById('printArea'),
+        previewControls: document.getElementById('previewControls'),
+        printBtn: document.getElementById('printBtn'),
+        closePreviewBtn: document.getElementById('closePreviewBtn')
+    };
+
+    // Excelファイル読み込みイベント
+    elements.dropZone.onclick = () => elements.fileInput.click();
+    elements.fileInput.onchange = handleFiles;
+    elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.borderColor = "#3b82f6"; };
+    elements.dropZone.ondragleave = () => { elements.dropZone.style.borderColor = "#cbd5e1"; };
+    elements.dropZone.ondrop = (e) => { e.preventDefault(); handleFiles({target: {files: e.dataTransfer.files}}); };
+
+    // ジェノグラムファイル読み込みイベント
+    elements.btnImportGeno.onclick = () => elements.genoFileInput.click();
+    elements.genoFileInput.onchange = (e) => {
+        const file = e.target.files[0]; 
+        if (!file) return;
+        
+        elements.genoFileNameDisplay.textContent = file.name;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => { 
+            try {
+                const parsed = JSON.parse(ev.target.result); 
+                if (!Array.isArray(parsed)) throw new Error("無効なフォーマット");
+                genoElements = parsed;
+            } catch (err) {
+                alert('ジェノグラムファイルの読み込みに失敗しました。正しいJSONファイルを選択してください。');
+                genoElements = [];
+                elements.genoFileNameDisplay.textContent = '読み込みエラー';
+            }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
+    };
+
+    async function handleFiles(e) {
+        if (typeof XLSX === 'undefined') {
+            alert('xlsx.full.min.js が見つかりません。同じディレクトリに配置してください。');
+            return;
+        }
+        if (typeof Encoding === 'undefined') {
+            alert('encoding.min.js が見つかりません。文字化け対策のため、同じディレクトリに配置してください。');
+            return;
+        }
+
+        const files = Array.from(e.target.files);
+        if (files.length === 0) return;
+
+        dataSources = [];
+        for (const file of files) {
+            try {
+                const rawData = await readData(file);
+                if (rawData && rawData.length > 0) {
+                    const headers = rawData[0];
+                    const rows = rawData.slice(1).map(row => {
+                        let obj = {};
+                        headers.forEach((h, i) => {
+                            let val = row[i];
+                            // 日付型の場合は自動フォーマット (年/月/日)
+                            if (val instanceof Date) {
+                                val = formatDateString(val);
+                            }
+                            obj[h] = val;
+                        });
+                        return obj;
+                    });
+                    
+                    let defaultCol = headers.find(h => String(h).includes("氏名") || String(h).includes("名前")) || headers[0];
+                    dataSources.push({ name: file.name, data: rows, headers: headers, nameCol: defaultCol });
+                }
+            } catch (err) {
+                console.error(err);
+                alert(file.name + " の読み込みに失敗しました。");
+            }
+        }
+        renderColumnSettings();
+    }
+
+    // Encoding.jsを利用して強制的に文字コードを変換してから読み込む
+    function readData(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          try {
+            const data = new Uint8Array(e.target.result);
+            let workbook;
+
+            let isBinaryExcel = false;
+            if (data.length > 4) {
+                if (data[0] === 0x50 && data[1] === 0x4B) isBinaryExcel = true;
+                if (data[0] === 0xD0 && data[1] === 0xCF && data[2] === 0x11 && data[3] === 0xE0) isBinaryExcel = true;
+            }
+
+            if (isBinaryExcel) {
+                workbook = XLSX.read(data, { type: 'array', cellDates: true });
+            } else {
+                const unicodeArray = Encoding.convert(data, { to: 'UNICODE', from: 'AUTO' });
+                const text = Encoding.codeToString(unicodeArray);
+                const cleanText = text.replace(/^\uFEFF/, '');
+                workbook = XLSX.read(cleanText, { type: 'string', cellDates: true });
+            }
+
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            resolve(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false }));
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function renderColumnSettings() {
+        elements.settingsList.innerHTML = '';
+        dataSources.forEach((src, idx) => {
+            const div = document.createElement('div');
+            div.className = 'setting-card';
+            div.innerHTML = `
+                <div class="source-label">FILE SOURCE</div>
+                <div class="source-name">${src.name}</div>
+                <select onchange="dataSources[${idx}].nameCol = this.value">
+                    ${src.headers.map(h => `<option value="${h}" ${h === src.nameCol ? 'selected' : ''}>${h}</option>`).join('')}
+                </select>
+            `;
+            elements.settingsList.appendChild(div);
+        });
+        elements.columnSettings.classList.remove('hidden');
+        elements.searchSection.classList.remove('hidden');
+    }
+
+    elements.searchBtn.onclick = () => {
+        const query = elements.searchInput.value.trim();
+        if (!query) return;
+        const found = new Set();
+        dataSources.forEach(src => {
+            src.data.forEach(row => {
+                const name = String(row[src.nameCol] || "");
+                if (name.includes(query)) found.add(name);
+            });
+        });
+        renderNameList(Array.from(found).sort());
+    };
+
+    function renderNameList(names) {
+        elements.nameList.innerHTML = '';
+        if (names.length === 0) {
+            elements.nameList.innerHTML = '<p style="text-align:center; color:#94a3b8; width:100%; padding:20px;">見つかりませんでした</p>';
+        } else {
+            names.forEach(name => {
+                const label = document.createElement('label');
+                label.className = 'name-item';
+                label.innerHTML = `<input type="checkbox" name="targetName" value="${name}"><span>${name}</span>`;
+                elements.nameList.appendChild(label);
+            });
+        }
+        elements.resultsArea.classList.remove('hidden');
+    }
+
+    elements.generateBtn.onclick = () => {
+        const selected = Array.from(document.querySelectorAll('input[name="targetName"]:checked')).map(el => el.value);
+        if (selected.length === 0) return alert("対象者を選択してください");
+
+        elements.printArea.innerHTML = '';
+        
+        // 選択された人ごとにカルテ生成
+        selected.forEach(name => {
+            let userRecords = [];
+            dataSources.forEach(src => {
+                const rows = src.data.filter(r => String(r[src.nameCol]) === name);
+                rows.forEach(r => userRecords.push({ source: src.name, content: r, nameCol: src.nameCol }));
+            });
+
+            // 日付に近いカラム名を探してソート
+            userRecords.sort((a, b) => {
+                const getDate = (o) => {
+                    const k = Object.keys(o.content).find(key => key.includes("日付") || key.includes("月日"));
+                    return o.content[k] || "";
+                };
+                return getDate(a) > getDate(b) ? 1 : -1;
+            });
+
+            const page = document.createElement('div');
+            page.className = 'a4-page page-break';
+            // 修正箇所：作成日を年/月/日に統一
+            let html = `
+                <div class="carte-header">
+                    <h1 class="carte-title">個人別相談記録カルテ</h1>
+                    <span style="font-size: 10px; color: #64748b;">作成日: ${formatDateString(new Date())}</span>
+                </div>
+                <div class="patient-info">
+                    <span class="label-badge">対象者氏名</span>
+                    <span class="patient-name">${name} <small style="font-size:14px; font-weight:normal; color:#64748b;">様</small></span>
+                </div>
+                <div class="records-container">
+            `;
+
+            userRecords.forEach(rec => {
+                html += `<div class="record-card"><div class="record-source">データ元: ${rec.source}</div>`;
+                Object.keys(rec.content).forEach(key => {
+                    if (key === rec.nameCol) return; 
+                    const val = rec.content[key];
+                    if (val === "" || val === null || val === undefined) return; 
+                    
+                    html += `
+                        <div class="item-row">
+                            <div class="item-label">${key}</div>
+                            <div class="item-value">${val}</div>
+                        </div>
+                    `;
+                });
+                html += `</div>`;
+            });
+
+            if (userRecords.length === 0) html += `<p style="text-align:center; padding: 40px; color:#cbd5e1;">該当する記録はありません</p>`;
+            
+            html += `</div>`;
+            page.innerHTML = html;
+            elements.printArea.appendChild(page);
+        });
+
+        // もしジェノグラムデータがあれば、カルテの最終ページとして追加する
+        if (genoElements && genoElements.length > 0) {
+            const genoPage = document.createElement('div');
+            genoPage.className = 'a4-page page-break';
+            genoPage.innerHTML = `
+                <div class="carte-header">
+                    <h1 class="carte-title">ジェノグラム</h1>
+                </div>
+                <div class="genogram-container">
+                    <svg id="printSvgCanvas" class="genogram-svg">
+                        <g id="printLineGroup"></g>
+                        <g id="printScribbleGroup"></g>
+                        <g id="printShapeGroup"></g>
+                    </svg>
+                </div>
+            `;
+            elements.printArea.appendChild(genoPage);
+
+            const shapeGroup = genoPage.querySelector('#printShapeGroup');
+            const lineGroup = genoPage.querySelector('#printLineGroup');
+            const scribbleGroup = genoPage.querySelector('#printScribbleGroup');
+            const svgCanvas = genoPage.querySelector('#printSvgCanvas');
+            
+            // ジェノグラムを描画する
+            renderGenogram(genoElements, shapeGroup, lineGroup, scribbleGroup, svgCanvas);
+        }
+
+        document.querySelector('.container').classList.add('hidden');
+        elements.printArea.classList.remove('hidden');
+        elements.previewControls.classList.remove('hidden');
+        window.scrollTo(0,0);
+    };
+
+    elements.closePreviewBtn.onclick = () => {
+        document.querySelector('.container').classList.remove('hidden');
+        elements.printArea.classList.add('hidden');
+        elements.previewControls.classList.add('hidden');
+    };
+
+    elements.printBtn.onclick = () => {
+        const originalTitle = document.title;
+        const now = new Date();
+        const dateStr = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0');
+        const timeStr = String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0') + String(now.getSeconds()).padStart(2,'0');
+        
+        document.title = `相談カルテ_${dateStr}_${timeStr}`;
+        window.print();
+        document.title = originalTitle;
+    };
+
+    // --- ジェノグラム SVG 描画ロジック ---
+    function createSVGElement(tag, attrs) {
+        const el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+        for (let k in attrs) el.setAttribute(k, attrs[k]);
+        return el;
+    }
+
+    function renderShapeTo(el, targetGroup) {
+        const g = createSVGElement("g", { "data-id": el.id });
+        const w = el.w || 50; const h = el.h || 50;
+        const color = el.color || "#000000"; const thick = el.thickness || 2;
+        const fw = el.fontWeight || "normal"; const fs = el.fontSize || 16;
+
+        let shape;
+        const isFilled = el.type === 'filledci' || el.type === 'filledsq';
+
+        if (el.type.includes('sq') || el.type === 'square' || el.type === 'filledsq') {
+            shape = createSVGElement("rect", { x: el.x, y: el.y, width: w, height: h });
+        } else if (el.type.includes('ci') || el.type === 'circle' || el.type === 'filledci') {
+            shape = createSVGElement("ellipse", { cx: el.x + w/2, cy: el.y + h/2, rx: w/2, ry: h/2 });
+        } else if (el.type === 'unknown') {
+            shape = createSVGElement("rect", { x: el.x, y: el.y, width: w, height: h, rx: w*0.3, ry: h*0.3 });
+        } else if (el.type === 'triangle') {
+            shape = createSVGElement("path", { d: `M ${el.x + w/2} ${el.y} L ${el.x + w} ${el.y + h} L ${el.x} ${el.y + h} Z` });
+        } else if (el.type === 'diamond') {
+            shape = createSVGElement("path", { d: `M ${el.x + w/2} ${el.y} L ${el.x + w} ${el.y + h/2} L ${el.x + w/2} ${el.y + h} L ${el.x} ${el.y + h/2} Z` });
+        } else if (el.type === 'cross') {
+            shape = createSVGElement("g", {});
+            shape.appendChild(createSVGElement("line", { x1: el.x, y1: el.y, x2: el.x+w, y2: el.y+h, stroke: color, "stroke-width": thick }));
+            shape.appendChild(createSVGElement("line", { x1: el.x+w, y1: el.y, x2: el.x, y2: el.y+h, stroke: color, "stroke-width": thick }));
+        } else if (el.type === 'doubleslash') {
+            shape = createSVGElement("g", {});
+            shape.appendChild(createSVGElement("line", { x1: el.x+w*0.3, y1: el.y+h, x2: el.x+w*0.7, y2: el.y, stroke: color, "stroke-width": thick }));
+            shape.appendChild(createSVGElement("line", { x1: el.x+w*0.6, y1: el.y+h, x2: el.x+w*1.0, y2: el.y, stroke: color, "stroke-width": thick }));
+        } else if (el.type === 'text') {
+            shape = createSVGElement("text", { x: el.x, y: el.y, "font-size": `${fs}px`, "font-weight": fw, fill: color });
+            shape.textContent = el.text || "";
+        }
+
+        if (el.type !== 'text' && el.type !== 'cross' && el.type !== 'doubleslash') {
+            shape.setAttribute("fill", isFilled ? color : "white");
+            shape.setAttribute("stroke", color);
+            shape.setAttribute("stroke-width", thick);
+            g.appendChild(shape);
+
+            if (el.type.startsWith('index')) {
+                const offset = thick + 3;
+                let inner;
+                if (el.type === 'indexsq') {
+                    inner = createSVGElement("rect", { x: el.x+offset, y: el.y+offset, width: Math.max(0, w-offset*2), height: Math.max(0, h-offset*2) });
+                } else {
+                    inner = createSVGElement("ellipse", { cx: el.x+w/2, cy: el.y+h/2, rx: Math.max(0, w/2-offset), ry: Math.max(0, h/2-offset) });
+                }
+                inner.setAttribute("fill", "none"); inner.setAttribute("stroke", color); inner.setAttribute("stroke-width", thick);
+                g.appendChild(inner);
+            }
+
+            if (el.type.startsWith('dec')) {
+                g.appendChild(createSVGElement("line", { x1: el.x, y1: el.y, x2: el.x+w, y2: el.y+h, stroke: color, "stroke-width": thick }));
+                g.appendChild(createSVGElement("line", { x1: el.x+w, y1: el.y, x2: el.x, y2: el.y+h, stroke: color, "stroke-width": thick }));
+            }
+
+            if (el.age) {
+                const ageText = createSVGElement("text", { x: el.x+w/2, y: el.y+h/2+fs*0.35, "text-anchor": "middle", "font-size": `${fs}px`, "font-weight": fw, fill: isFilled ? "white" : color, "pointer-events": "none" });
+                ageText.textContent = el.age;
+                g.appendChild(ageText);
+            }
+        } else {
+            g.appendChild(shape);
+        }
+
+        if (el.type !== 'text' && el.text) {
+            const t = createSVGElement("text", { x: el.x+w/2, y: el.y+h + 16, "text-anchor": "middle", "font-size": "12px", "font-weight": fw, fill: color });
+            t.textContent = el.text; g.appendChild(t);
+        }
+
+        targetGroup.appendChild(g);
+    }
+
+    function renderLineTo(el, targetGroup) {
+        const g = createSVGElement("g", { "data-id": el.id });
+        const color = el.color || "#000000"; const thick = el.thickness || 2;
+
+        const drawPath = (ox = 0, oy = 0) => {
+            const path = createSVGElement("path", { fill: "none", stroke: color, "stroke-width": thick });
+            let d = `M ${el.x+ox} ${el.y+oy} L ${el.x2+ox} ${el.y2+oy}`;
+            
+            if (el.style === 'conflict') {
+                const dx = el.x2 - el.x; const dy = el.y2 - el.y;
+                const len = Math.sqrt(dx*dx + dy*dy); const steps = Math.floor(len / 8);
+                let z = `M ${el.x} ${el.y}`;
+                for(let i=1; i<=steps; i++){
+                    const t = i/steps; const px = el.x + dx*t; const py = el.y + dy*t;
+                    const off = 6 * (i%2 === 0 ? 1 : -1);
+                    z += ` L ${px + -dy/len*off} ${py + dx/len*off}`;
+                }
+                d = z + ` L ${el.x2} ${el.y2}`;
+            }
+            path.setAttribute("d", d);
+            if (el.style === 'dashed') path.setAttribute("stroke-dasharray", "8,5");
+            if (el.style === 'dotted') path.setAttribute("stroke-dasharray", "2,4");
+            return path;
+        };
+
+        g.appendChild(drawPath());
+
+        if (el.style === 'double') {
+            const angle = Math.atan2(el.y2 - el.y, el.x2 - el.x) + Math.PI/2;
+            g.appendChild(drawPath(Math.cos(angle)*5, Math.sin(angle)*5));
+        }
+
+        if (el.style === 'divorce' || el.style === 'separation') {
+            const mx = (el.x + el.x2)/2; const my = (el.y + el.y2)/2;
+            const a = Math.atan2(el.y2 - el.y, el.x2 - el.x);
+            const slash = (off) => {
+                const sx = Math.cos(a+Math.PI/2)*10; const sy = Math.sin(a+Math.PI/2)*10;
+                g.appendChild(createSVGElement("line", { x1: mx-sx+off, y1: my-sy, x2: mx+sx+off, y2: my+sy, stroke: color, "stroke-width": thick }));
+            }
+            slash(0);
+            if (el.style === 'divorce') { slash(-4); slash(4); }
+        }
+
+        targetGroup.appendChild(g);
+    }
+
+    function renderScribbleTo(el, targetGroup) {
+        if (!el.points || el.points.length < 2) return;
+        let d = `M ${el.points[0].x} ${el.points[0].y}`;
+        el.points.forEach(p => d += ` L ${p.x} ${p.y}`);
+        const path = createSVGElement("path", { d: d, fill: "none", stroke: el.color || "black", "stroke-width": el.thickness || 2, "data-id": el.id, "stroke-linecap": "round", "stroke-linejoin": "round" });
+        
+        if (el.style === 'dashed') path.setAttribute("stroke-dasharray", "8,5");
+        if (el.style === 'dotted') path.setAttribute("stroke-dasharray", "2,4");
+
+        targetGroup.appendChild(path);
+    }
+
+    // ジェノグラム全体を描画し、SVGの表示領域を自動調整する
+    function renderGenogram(elements, shapeGroup, lineGroup, scribbleGroup, svgCanvas) {
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+
+        elements.forEach(el => {
+            if (el.type === 'line') {
+                renderLineTo(el, lineGroup);
+                minX = Math.min(minX, el.x, el.x2); minY = Math.min(minY, el.y, el.y2);
+                maxX = Math.max(maxX, el.x, el.x2); maxY = Math.max(maxY, el.y, el.y2);
+            } else if (el.type === 'scribble') {
+                renderScribbleTo(el, scribbleGroup);
+                el.points.forEach(p => {
+                    minX = Math.min(minX, p.x); minY = Math.min(minY, p.y);
+                    maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y);
+                });
+            } else {
+                renderShapeTo(el, shapeGroup);
+                const w = el.w || 50; const h = el.h || 50;
+                minX = Math.min(minX, el.x); minY = Math.min(minY, el.y);
+                maxX = Math.max(maxX, el.x + w); maxY = Math.max(maxY, el.y + h);
+            }
+        });
+
+        // 描画された要素群のサイズに合わせてViewBoxを設定し、自動的にA4内にスケーリングされるようにする
+        if (minX !== Infinity) {
+            const padding = 50;
+            const vw = (maxX - minX) + padding * 2;
+            const vh = (maxY - minY) + padding * 2;
+            svgCanvas.setAttribute('viewBox', `${minX - padding} ${minY - padding} ${vw} ${vh}`);
+        }
+    }
+</script>
+
+</body>
+</html>
