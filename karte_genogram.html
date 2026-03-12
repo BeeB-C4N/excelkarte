@@ -122,10 +122,15 @@
                 <div style="margin-bottom: 24px;">
                     <p style="font-size: 14px; color: #475569; margin-bottom: 12px;">【オプション】カルテの最後にジェノグラムを追加する場合はJSONファイルを読み込んでください</p>
                     <input type="file" id="genoFileInput" accept=".json" class="hidden">
-                    <button id="btnImportGeno" class="btn btn-outline">
-                        ジェノグラム(.json)を選択
-                    </button>
-                    <span id="genoFileNameDisplay" style="margin-left: 12px; font-size: 14px; color: #64748b;">ファイル未選択</span>
+                    <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <button id="btnImportGeno" class="btn btn-outline">
+                            ジェノグラム(.json)を選択
+                        </button>
+                        <button id="btnClearGeno" class="btn btn-outline" style="border-color: #cbd5e1; color: #64748b;">
+                            クリア
+                        </button>
+                        <span id="genoFileNameDisplay" style="margin-left: 8px; font-size: 14px; color: #64748b;">ファイル未選択</span>
+                    </div>
                 </div>
                 <button id="generateBtn" class="btn btn-success">カルテプレビューを生成</button>
             </div>
@@ -171,6 +176,7 @@
         nameList: document.getElementById('nameList'),
         genoFileInput: document.getElementById('genoFileInput'),
         btnImportGeno: document.getElementById('btnImportGeno'),
+        btnClearGeno: document.getElementById('btnClearGeno'),
         genoFileNameDisplay: document.getElementById('genoFileNameDisplay'),
         generateBtn: document.getElementById('generateBtn'),
         printArea: document.getElementById('printArea'),
@@ -208,6 +214,13 @@
         };
         reader.readAsText(file);
         e.target.value = '';
+    };
+
+    // ジェノグラムのクリアイベント
+    elements.btnClearGeno.onclick = () => {
+        genoElements = [];
+        elements.genoFileInput.value = '';
+        elements.genoFileNameDisplay.textContent = 'ファイル未選択';
     };
 
     async function handleFiles(e) {
