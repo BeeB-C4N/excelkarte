@@ -260,7 +260,7 @@
                                 val = formatDateString(val);
                             } 
                             // 2. 文字列で読み込まれてしまった日付データに対する救済処置
-                            else if (typeof val === 'string' && (headerStr.includes("日") || headerStr.includes("月"))) {
+                            else if (typeof val === 'string' && (headerStr.includes("日") || headerStr.includes("月") || headerStr.toLowerCase().includes("date"))) {
                                 const parsedDate = new Date(val);
                                 // 日付として有効であり、かつ年（4桁）や区切り文字を含むか簡易チェック
                                 if (!isNaN(parsedDate.getTime()) && val.match(/\d{4}/) && val.match(/[/-]/)) {
@@ -309,7 +309,7 @@
             }
 
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            // 修正箇所：raw: true を指定し、Dateオブジェクトへの変換(cellDates)を確実に機能させる
+            // raw: true を指定し、Dateオブジェクトへの変換(cellDates)を確実に機能させる
             resolve(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }));
           } catch (err) {
             reject(err);
@@ -379,18 +379,42 @@
                 rows.forEach(r => userRecords.push({ source: src.name, content: r, nameCol: src.nameCol }));
             });
 
-            // 日付に近いカラム名を探してソート
+            // --- 日付を推測して時系列（古い順）にソートするロジック ---
             userRecords.sort((a, b) => {
-                const getDate = (o) => {
-                    const k = Object.keys(o.content).find(key => key.includes("日付") || key.includes("月日"));
-                    return o.content[k] || "";
+                const getSortTimestamp = (o) => {
+                    // 1. カラム名に「日」や「date」等が含まれるものを優先して探す
+                    const dateKeys = Object.keys(o.content).filter(key => key.match(/日|月日|年月日|日時|date|time/i));
+                    for (const key of dateKeys) {
+                        const val = o.content[key];
+                        if (val) {
+                            const d = new Date(val);
+                            if (!isNaN(d.getTime())) return d.getTime();
+                        }
+                    }
+                    // 2. 見つからない場合は、すべての値の中から「YYYY/MM/DD」形式等にマッチするものを探す
+                    for (const key in o.content) {
+                        if (key === o.nameCol) continue;
+                        const val = String(o.content[key]);
+                        // YYYY/MM/DD や YYYY-MM-DD のような形式を検知
+                        if (val.match(/^\d{4}[/-]\d{1,2}[/-]\d{1,2}/)) {
+                            const d = new Date(val);
+                            if (!isNaN(d.getTime())) return d.getTime();
+                        }
+                    }
+                    return 0; // 日付が見つからない場合
                 };
-                return getDate(a) > getDate(b) ? 1 : -1;
+
+                const timeA = getSortTimestamp(a);
+                const timeB = getSortTimestamp(b);
+                
+                if (timeA === 0 && timeB === 0) return 0;
+                if (timeA === 0) return 1;  // 日付不明は下に配置
+                if (timeB === 0) return -1;
+                return timeA - timeB; // 昇順 (古い記録から新しい記録へ)
             });
 
             const page = document.createElement('div');
             page.className = 'a4-page page-break';
-            // 修正箇所：作成日を年/月/日に統一
             let html = `
                 <div class="carte-header">
                     <h1 class="carte-title">相談カルテ</h1>
