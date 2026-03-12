@@ -144,7 +144,7 @@
 
 <script>
     /* --- 互換性維持のためのPolyfill --- */
-    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
+    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=function||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
 
     // --- 日付フォーマット関数 (年/月/日) ---
     function formatDateString(date) {
@@ -233,10 +233,21 @@
                         let obj = {};
                         headers.forEach((h, i) => {
                             let val = row[i];
-                            // 日付型の場合は自動フォーマット (年/月/日)
+                            const headerStr = String(h);
+
+                            // 1. Date型の場合はそのままフォーマット (年/月/日)
                             if (val instanceof Date) {
                                 val = formatDateString(val);
+                            } 
+                            // 2. 文字列で読み込まれてしまった日付データに対する救済処置
+                            else if (typeof val === 'string' && (headerStr.includes("日") || headerStr.includes("月"))) {
+                                const parsedDate = new Date(val);
+                                // 日付として有効であり、かつ年（4桁）や区切り文字を含むか簡易チェック
+                                if (!isNaN(parsedDate.getTime()) && val.match(/\d{4}/) && val.match(/[/-]/)) {
+                                    val = formatDateString(parsedDate);
+                                }
                             }
+                            
                             obj[h] = val;
                         });
                         return obj;
@@ -278,7 +289,8 @@
             }
 
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
-            resolve(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false }));
+            // 修正箇所：raw: true を指定し、Dateオブジェクトへの変換(cellDates)を確実に機能させる
+            resolve(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true }));
           } catch (err) {
             reject(err);
           }
