@@ -149,7 +149,7 @@
 
 <script>
     /* --- 互換性維持のためのPolyfill --- */
-    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=function||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
+    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
 
     // --- 日付フォーマット関数 (年/月/日) ---
     function formatDateString(date) {
@@ -186,11 +186,18 @@
     };
 
     // Excelファイル読み込みイベント
-    elements.dropZone.onclick = () => elements.fileInput.click();
+    elements.dropZone.onclick = (e) => {
+        if(e.target !== elements.fileInput) elements.fileInput.click();
+    };
     elements.fileInput.onchange = handleFiles;
+    elements.dropZone.ondragenter = (e) => { e.preventDefault(); elements.dropZone.style.borderColor = "#3b82f6"; };
     elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.borderColor = "#3b82f6"; };
-    elements.dropZone.ondragleave = () => { elements.dropZone.style.borderColor = "#cbd5e1"; };
-    elements.dropZone.ondrop = (e) => { e.preventDefault(); handleFiles({target: {files: e.dataTransfer.files}}); };
+    elements.dropZone.ondragleave = (e) => { e.preventDefault(); elements.dropZone.style.borderColor = "#cbd5e1"; };
+    elements.dropZone.ondrop = (e) => { 
+        e.preventDefault(); 
+        elements.dropZone.style.borderColor = "#cbd5e1";
+        handleFiles({target: {files: e.dataTransfer.files}}); 
+    };
 
     // ジェノグラムファイル読み込みイベント
     elements.btnImportGeno.onclick = () => elements.genoFileInput.click();
