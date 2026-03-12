@@ -83,7 +83,7 @@
 <div class="container no-print">
     <header>
         <h1>日報集約・個人カルテ作成ツール</h1>
-        <p class="subtitle">複数のExcel/CSVから特定個人の相談内容を抽出し、1枚のカルテとして集約します</p>
+        <p class="subtitle">複数のファイルを統合し、特定の対象者の情報をカルテ形式で出力します</p>
     </header>
 
     <section>
@@ -120,31 +120,33 @@
 </div>
 
 <script>
-    // --- グローバル状態 ---
+    /* --- 互換性維持のためのPolyfill --- */
+    if(!Object.keys)Object.keys=function(){var t=Object.prototype.hasOwnProperty,e=!{toString:null}.propertyIsEnumerable("toString"),r=["toString","toLocaleString","valueOf","hasOwnProperty","isPrototypeOf","propertyIsEnumerable","constructor"],i=r.length;return function(n){if(typeof n!=="object"&&typeof n!=="function"||n===null)throw new TypeError("Object.keys called on non-object");var o=[];for(var a in n)if(t.call(n,a))o.push(a);if(e)for(var l=0;l<i;++l)if(t.call(n,r[l]))o.push(r[l]);return o}}();if(!String.prototype.trim)String.prototype.trim=function(){var t=this.replace(/^\s+/,"");for(var e=t.length-1;e>=0;--e)if(!t.charAt(e).match(/^\s/))return t.slice(0,e+1);return""};if(!Array.prototype.forEach)Array.prototype.forEach=function(t){var e=this.length>>>0,r=arguments[1]||void 0;for(var i=0;i<e;++i)if(i in this)r?t.call(r,this[i],i,this):t(this[i],i,this)};if(!Array.isArray)Array.isArray=function(t){return Object.prototype.toString.call(t)==="[object Array]"};
+
+    // --- メインロジック ---
     let dataSources = [];
+    const elements = {
+        fileInput: document.getElementById('fileInput'),
+        dropZone: document.getElementById('dropZone'),
+        settingsList: document.getElementById('settingsList'),
+        columnSettings: document.getElementById('columnSettings'),
+        searchSection: document.getElementById('searchSection'),
+        searchInput: document.getElementById('searchInput'),
+        searchBtn: document.getElementById('searchBtn'),
+        resultsArea: document.getElementById('resultsArea'),
+        nameList: document.getElementById('nameList'),
+        generateBtn: document.getElementById('generateBtn'),
+        printArea: document.getElementById('printArea'),
+        previewControls: document.getElementById('previewControls'),
+        printBtn: document.getElementById('printBtn'),
+        closePreviewBtn: document.getElementById('closePreviewBtn')
+    };
 
-    // --- DOM要素 ---
-    const fileInput = document.getElementById('fileInput');
-    const dropZone = document.getElementById('dropZone');
-    const settingsList = document.getElementById('settingsList');
-    const columnSettings = document.getElementById('columnSettings');
-    const searchSection = document.getElementById('searchSection');
-    const searchInput = document.getElementById('searchInput');
-    const searchBtn = document.getElementById('searchBtn');
-    const resultsArea = document.getElementById('resultsArea');
-    const nameList = document.getElementById('nameList');
-    const generateBtn = document.getElementById('generateBtn');
-    const printArea = document.getElementById('printArea');
-    const previewControls = document.getElementById('previewControls');
-    const printBtn = document.getElementById('printBtn');
-    const closePreviewBtn = document.getElementById('closePreviewBtn');
-
-    // --- イベントリスナー ---
-    dropZone.onclick = () => fileInput.click();
-    fileInput.onchange = handleFiles;
-    dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = "#3b82f6"; };
-    dropZone.ondragleave = () => { dropZone.style.borderColor = "#cbd5e1"; };
-    dropZone.ondrop = (e) => { e.preventDefault(); handleFiles({target: {files: e.dataTransfer.files}}); };
+    elements.dropZone.onclick = () => elements.fileInput.click();
+    elements.fileInput.onchange = handleFiles;
+    elements.dropZone.ondragover = (e) => { e.preventDefault(); elements.dropZone.style.borderColor = "#3b82f6"; };
+    elements.dropZone.ondragleave = () => { elements.dropZone.style.borderColor = "#cbd5e1"; };
+    elements.dropZone.ondrop = (e) => { e.preventDefault(); handleFiles({target: {files: e.dataTransfer.files}}); };
 
     async function handleFiles(e) {
         if (typeof XLSX === 'undefined') {
@@ -173,7 +175,6 @@
                         return obj;
                     });
                     
-                    // 「氏名」「名前」を含む列を自動抽出
                     let defaultCol = headers.find(h => String(h).includes("氏名") || String(h).includes("名前")) || headers[0];
                     dataSources.push({ name: file.name, data: rows, headers: headers, nameCol: defaultCol });
                 }
@@ -185,43 +186,23 @@
         renderColumnSettings();
     }
 
-    // Excel または CSV を読み込む（文字化け対策：UTF-8優先→Shift-JIS fallback）
+    // Excel または CSV を読み込む
     function readData(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
-        const fileName = file.name.toLowerCase();
-
         reader.onload = (e) => {
           try {
             const data = new Uint8Array(e.target.result);
-            let workbook;
-
-            if (fileName.endsWith('.csv')) {
-              // 1) UTF-8 を試す（BOM除去もする）
-              const utf8 = new TextDecoder('utf-8').decode(data).replace(/^\uFEFF/, '');
-
-              // “明らかに文字化け”っぽい記号が多いときは Shift-JIS を試す
-              const looksGarbled = (s) => {
-                const bad = (s.match(/\uFFFD/g) || []).length;
-                return bad >= 2;
-              };
-
-              let csvText = utf8;
-              if (looksGarbled(utf8)) {
-                // 2) Shift-JIS（CP932）で再デコード
-                csvText = new TextDecoder('shift-jis').decode(data);
-              }
-              workbook = XLSX.read(csvText, { type: 'string' });
-            } else {
-              // .xlsx / .xls
-              workbook = XLSX.read(data, {
-                type: 'array',
-                cellDates: true,
-                codepage: 932, 
-              });
-            }
+            
+            // 日本語WindowsのCP932(Shift-JIS)を明示的に指定して読込
+            const workbook = XLSX.read(data, {
+              type: 'array',
+              cellDates: true,
+              codepage: 932, 
+            });
 
             const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            // raw: false にすることで書式設定済みの値（日付など）を文字列として取得しやすくする
             resolve(XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false }));
           } catch (err) {
             reject(err);
@@ -232,7 +213,7 @@
     }
 
     function renderColumnSettings() {
-        settingsList.innerHTML = '';
+        elements.settingsList.innerHTML = '';
         dataSources.forEach((src, idx) => {
             const div = document.createElement('div');
             div.className = 'setting-card';
@@ -243,14 +224,14 @@
                     ${src.headers.map(h => `<option value="${h}" ${h === src.nameCol ? 'selected' : ''}>${h}</option>`).join('')}
                 </select>
             `;
-            settingsList.appendChild(div);
+            elements.settingsList.appendChild(div);
         });
         columnSettings.classList.remove('hidden');
         searchSection.classList.remove('hidden');
     }
 
     searchBtn.onclick = () => {
-        const query = searchInput.value.trim();
+        const query = elements.searchInput.value.trim();
         if (!query) return;
         const found = new Set();
         dataSources.forEach(src => {
@@ -263,15 +244,15 @@
     };
 
     function renderNameList(names) {
-        nameList.innerHTML = '';
+        elements.nameList.innerHTML = '';
         if (names.length === 0) {
-            nameList.innerHTML = '<p style="text-align:center; color:#94a3b8; width:100%; padding:20px;">見つかりませんでした</p>';
+            elements.nameList.innerHTML = '<p style="text-align:center; color:#94a3b8; width:100%; padding:20px;">見つかりませんでした</p>';
         } else {
             names.forEach(name => {
                 const label = document.createElement('label');
                 label.className = 'name-item';
                 label.innerHTML = `<input type="checkbox" name="targetName" value="${name}"><span>${name}</span>`;
-                nameList.appendChild(label);
+                elements.nameList.appendChild(label);
             });
         }
         resultsArea.classList.remove('hidden');
@@ -313,11 +294,11 @@
             `;
 
             userRecords.forEach(rec => {
-                html += `<div class="record-card"><div class="record-source">データソース: ${rec.source}</div>`;
+                html += `<div class="record-card"><div class="record-source">データ元: ${rec.source}</div>`;
                 Object.keys(rec.content).forEach(key => {
-                    if (key === rec.nameCol) return; // 名前はヘッダーにあるためスキップ
+                    if (key === rec.nameCol) return; 
                     const val = rec.content[key];
-                    if (val === "" || val === null || val === undefined) return; // 空白は非表示
+                    if (val === "" || val === null || val === undefined) return; 
                     
                     html += `
                         <div class="item-row">
